@@ -81,6 +81,18 @@ jobs:
           
           echo "Testing RAG system in mock mode..."
           docker-compose run --rm app rag --mock --query "Bitcoin"
+          
+          echo "Testing LangChain RAG implementation in mock mode..."
+          docker-compose run --rm app langchain-rag --mock --query "Bitcoin"
+          
+          echo "Testing example usage script in batch mode..."
+          docker-compose run --rm app example --batch
+          
+          echo "Testing migration script in mock mode..."
+          docker-compose run --rm app migrate --mock
+          
+          echo "Testing comparison of RAG implementations..."
+          docker-compose run --rm app compare --query "Ethereum" --mock
 
       - name: Verify container logs
         run: docker-compose logs

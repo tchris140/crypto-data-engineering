@@ -9,6 +9,10 @@ This repository contains tools for collecting, processing, and analyzing cryptoc
 - **Reddit Data Scraping**: Collects posts from cryptocurrency subreddits with OpenAI embeddings
 - **PostgreSQL Storage**: Structures and stores data in a PostgreSQL database
 - **Automated Workflows**: Uses GitHub Actions for scheduled data collection
+- **LangChain RAG Implementation**: Leverages LangChain for modular, extensible RAG capabilities
+- **Interactive Example**: User-friendly interface for interacting with the RAG system
+- **Multiple Cryptocurrencies**: Support for Bitcoin, Ethereum, Solana, and cryptocurrency topics like regulations, mining, and NFTs
+- **Docker Support**: Full containerization for easy deployment and testing
 
 ## Components
 
@@ -34,11 +38,61 @@ The Retrieval-Augmented Generation (RAG) system provides AI-powered cryptocurren
 
 - **RAG.py**: Original implementation that retrieves and presents data
 - **improved_RAG.py**: Enhanced version that generates conversational responses
+- **langchain_rag.py**: Advanced implementation using LangChain for modular RAG
+- **example_usage.py**: Interactive script for using the LangChain RAG implementation
 - Uses OpenAI to create natural language answers based on retrieved data
 - Combines structured market data with relevant Reddit discussions
 - Supports mock mode for testing without API calls
 
+#### LangChain RAG Features
+
+The LangChain implementation provides several advantages:
+
+- **Modular Architecture**: Easily swap out components like embeddings, retrievers, and LLMs
+- **Advanced Query Capabilities**: Better retrieval of relevant documents through various similarity methods
+- **Structured Prompting**: Enhanced prompt engineering through LangChain's prompt templates
+- **Document Management**: Better handling of document metadata and content
+- **Seamless PGVector Integration**: Direct integration with PostgreSQL vector storage
+- **More Sophisticated Chains**: Build complex reasoning chains for improved responses
+- **Multiple Interaction Modes**: Single query, batch processing, and interactive chat modes
+- **Topic-Specific Responses**: Specialized responses for topics like regulations, NFTs, and mining
+
+### 4. Migration Utilities
+
+Utilities to help transition between implementations:
+
+- **migrate_to_langchain.py**: Converts existing Reddit embeddings to LangChain PGVector format
+- **compare_rag_implementations.py**: Compare the three RAG implementations side by side
+
 ## Setup and Installation
+
+### Using Docker (Recommended)
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/crypto-data-engineering.git
+   cd crypto-data-engineering
+   ```
+
+2. Run the setup script to create the .env file and start the containers:
+   ```bash
+   chmod +x setup.sh
+   ./setup.sh start
+   ```
+
+3. Use the setup script to run various components:
+   ```bash
+   # Run LangChain RAG with a query
+   ./setup.sh langchain "What's the current price of Bitcoin?"
+   
+   # Run the example script in batch mode
+   ./setup.sh example --batch
+   
+   # Run the example script in interactive mode
+   ./setup.sh example --interactive
+   ```
+
+### Manual Setup
 
 1. Clone this repository
 2. Install dependencies:
@@ -61,6 +115,7 @@ The Retrieval-Augmented Generation (RAG) system provides AI-powered cryptocurren
    DB_USER=your_database_user
    DB_PASSWORD=your_database_password
    ```
+
 4. Set up PostgreSQL with pgvector extension:
    ```sql
    -- Install the pgvector extension (requires PostgreSQL admin privileges)
@@ -76,6 +131,16 @@ The Retrieval-Augmented Generation (RAG) system provides AI-powered cryptocurren
        created_utc TEXT,
        embedding TEXT,
        embedding_vector vector(1536)
+   );
+   
+   -- Create LangChain PGVector collection table
+   CREATE TABLE IF NOT EXISTS langchain_pg_embedding (
+       uuid UUID PRIMARY KEY,
+       collection_id TEXT NOT NULL,
+       embedding vector(1536),
+       document JSONB,
+       cmetadata JSONB,
+       custom_id TEXT
    );
    ```
 
@@ -115,13 +180,79 @@ The Retrieval-Augmented Generation (RAG) system provides AI-powered cryptocurren
 
 #### Example: Generating Insights with RAG
 
-1. Run the improved RAG system to generate insights based on a query:
+1. Run the original RAG system:
    ```bash
-   python improved_RAG.py --query "Bitcoin"
+   python RAG.py --query "Bitcoin"
    ```
-2. Test the system in mock mode:
+   
+2. Run the improved RAG system:
    ```bash
-   python improved_RAG.py --mock --query "Ethereum"
+   python improved_RAG.py --query "Ethereum"
+   ```
+   
+3. Run the LangChain RAG system (recommended):
+   ```bash
+   python langchain_rag.py --query "Solana"
+   ```
+   
+4. Test any of the systems in mock mode:
+   ```bash
+   python langchain_rag.py --mock --query "Ethereum"
+   ```
+
+### Interactive Example Usage
+
+The example_usage.py script provides multiple ways to interact with the LangChain RAG system:
+
+1. **Single Query Mode**:
+   ```bash
+   python example_usage.py --query "What is the current price of Bitcoin?"
+   ```
+
+2. **Batch Mode** (processes a set of predefined queries):
+   ```bash
+   python example_usage.py --batch
+   ```
+
+3. **Interactive Mode** (chat-like interface):
+   ```bash
+   python example_usage.py --interactive
+   ```
+
+### Migration and Comparison
+
+1. Migrate existing Reddit embeddings to LangChain PGVector format:
+   ```bash
+   python migrate_to_langchain.py
+   ```
+   
+2. Compare the three RAG implementations:
+   ```bash
+   python compare_rag_implementations.py --query "Ethereum" --full
+   ```
+
+### Using Docker
+
+The project includes Docker support for easy deployment and testing:
+
+1. Build and start the containers:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. Run commands using the docker-compose:
+   ```bash
+   # Run LangChain RAG
+   docker-compose run --rm app langchain-rag --query "Bitcoin"
+   
+   # Run the example script
+   docker-compose run --rm app example --batch
+   ```
+
+3. Or use the provided setup.sh script:
+   ```bash
+   ./setup.sh langchain "Bitcoin"
+   ./setup.sh example --interactive
    ```
 
 ## Automated Workflows
@@ -141,6 +272,11 @@ This repository includes GitHub Actions workflows that run on a schedule. To ena
 - **Connection Management**: Improved database connection handling
 - **Upsert Strategy**: Changed from replace to upsert to preserve historical data
 - **Documentation**: Added comprehensive code comments and user documentation
+- **LangChain Integration**: Added support for the LangChain MCP framework
+- **Interactive Interface**: Created user-friendly interfaces for interacting with the RAG system
+- **Extended Cryptocurrency Coverage**: Added support for multiple cryptocurrencies
+- **Specialized Topic Handling**: Enhanced responses for topics like regulations, NFTs, and mining
+- **Full Docker Support**: Improved containerization for easier deployment and testing
 
 ## Contributing
 
@@ -157,8 +293,31 @@ graph TD;
     A[DeFi Llama Scraper] -->|Fetches TVL & Market Data| B[PostgreSQL Storage];
     C[Reddit Scraper] -->|Fetches Posts & Embeddings| B;
     B --> D[RAG System];
-    D -->|Generates Insights| E[User];
+    B --> E[LangChain RAG];
+    D -->|Generates Insights| F[User];
+    E -->|Generates Enhanced Insights| F;
 ```
+
+# Comparing RAG Implementations
+
+The project now includes three RAG implementations to demonstrate different approaches:
+
+1. **Original RAG (RAG.py)**
+   - Simple approach that retrieves and combines data
+   - Limited conversation ability
+   - Basic prompt construction
+
+2. **Improved RAG (improved_RAG.py)**
+   - Enhanced retrieval with better similarity search
+   - Improved conversation with more context
+   - Data lineage tracking
+
+3. **LangChain RAG (langchain_rag.py)**
+   - Modular components that can be swapped out
+   - Advanced retrieval using PGVector
+   - Sophisticated prompt engineering
+   - Better document handling and metadata management
+   - Seamless integration with various LLMs
 
 # Detailed Examples
 
@@ -192,18 +351,22 @@ graph TD;
    python Reddit_scraper.py --mock
    ```
 
-## Conversational Crypto Assistant
+## Conversational Crypto Assistant with LangChain
 
-### Example: Generating Insights with RAG
+### Example: Using the LangChain RAG Implementation
 
-1. Run the improved RAG system to generate insights based on a query:
-   ```bash
-   python improved_RAG.py --query "Bitcoin"
-   ```
-2. Test the system in mock mode:
-   ```bash
-   python improved_RAG.py --mock --query "Ethereum"
-   ```
+```python
+from langchain_rag import CryptoRAGSystem
+
+# Initialize the RAG system
+rag = CryptoRAGSystem()
+
+# Get an answer to a crypto question
+response = rag.chat("What's happening with Ethereum lately?")
+
+# Print the response
+print(response)
+```
 
 ## Testing
 
@@ -241,25 +404,18 @@ python test_reddit_scraper.py
 
 ```
 .
-├── .github/workflows/           # GitHub Actions workflow configuration
-│   ├── crypto_data_pipeline.yml # Workflow for DeFi Llama pipeline
-│   └── reddit_scraper.yml       # Workflow for Reddit pipeline
-├── DefiLlama_scraper.py         # Fetches blockchain TVL and market data
-├── DefiLlama_to_postgresql.py   # Stores DeFi data in PostgreSQL
-├── DefiLlama_mock.py            # Mock version for testing without API calls
-├── Reddit_scraper.py            # Fetches Reddit posts and generates embeddings
-├── test_reddit_scraper.py       # Tests for Reddit scraper functionality
-├── RAG.py                       # Original Retrieval-Augmented Generation system
-├── improved_RAG.py              # Enhanced conversational RAG system
-├── check.py                     # Database connectivity and data quality checks
-├── test_pgvector.py             # Tests for pgvector functionality
-├── confirm_github_ready.py      # Checks if repository is ready for GitHub Actions
-├── test_github_secrets.py       # Tests environment variables for GitHub Actions
-├── requirements.txt             # Project dependencies
-├── .gitignore                   # Git ignore configuration
-├── output_data.csv              # Sample DeFi data output
-├── reddit_crypto_posts.csv      # Sample Reddit data output
-└── README.md                    # Project documentation
+├── .github/workflows/              # GitHub Actions workflow configuration
+│   ├── crypto_data_pipeline.yml    # Workflow for DeFi Llama pipeline
+│   └── reddit_scraper.yml          # Workflow for Reddit pipeline
+├── DefiLlama_scraper.py            # Fetches blockchain TVL and market data
+├── DefiLlama_to_postgresql.py      # Stores DeFi data in PostgreSQL
+├── DefiLlama_mock.py               # Mock version for testing without API calls
+├── Reddit_scraper.py               # Fetches Reddit posts and generates embeddings
+├── RAG.py                          # Original RAG implementation
+├── improved_RAG.py                 # Enhanced RAG with better conversation
+├── langchain_rag.py                # LangChain implementation of RAG
+├── migrate_to_langchain.py         # Utility to migrate embeddings to LangChain format
+└── compare_rag_implementations.py  # Tool to compare the three RAG implementations
 ```
 
 ## Command-line Options
@@ -296,17 +452,17 @@ python Reddit_scraper.py --subreddit bitcoin
 python Reddit_scraper.py --hours 48
 ```
 
-### improved_RAG.py
+### langchain_rag.py
 
 ```bash
 # Query with real API calls
-python improved_RAG.py --query "Bitcoin price prediction"
+python langchain_rag.py --query "Bitcoin price prediction"
 
 # Mock mode (no API calls)
-python improved_RAG.py --mock --query "Ethereum gas fees"
+python langchain_rag.py --mock --query "Ethereum gas fees"
 
 # Specify number of Reddit posts to retrieve (default: 3)
-python improved_RAG.py --query "Solana" --posts 5
+python langchain_rag.py --query "Solana" --posts 5
 ```
 
 ### test_pgvector.py
@@ -422,7 +578,7 @@ This project can be run using Docker and Docker Compose for easy setup and repro
    ./setup.sh reddit
    
    # Run RAG system with a query
-   ./setup.sh rag "Bitcoin price trends"
+   ./setup.sh langchain "Bitcoin price trends"
    ```
 
 ### Running in Mock Mode
@@ -436,7 +592,7 @@ Test the application without using real API calls:
 # Run individual components in mock mode
 ./setup.sh defi --mock
 ./setup.sh reddit --mock
-./setup.sh rag --mock --query "Ethereum"
+./setup.sh langchain --mock --query "Ethereum"
 ```
 
 ### Useful Commands
@@ -550,3 +706,96 @@ The visualization shows:
 - **Red nodes**: Destinations (databases, files)
 
 Hover over nodes and edges to see detailed metadata about each component and transformation.
+
+# Cryptocurrency RAG System with LangChain
+
+This project implements a Retrieval-Augmented Generation (RAG) system for cryptocurrency data using LangChain. The system retrieves structured market data and community discussions from Reddit to provide comprehensive responses to user queries about cryptocurrencies.
+
+## Features
+
+- **LangChain Integration**: Integrates with the LangChain framework for enhanced RAG capabilities.
+- **Data Lineage Tracking**: Tracks the flow of data through the system for better transparency.
+- **Mock Mode**: Supports mock mode for testing and development without the need for real API calls.
+- **Multiple Interfaces**: Provides batch processing, single query, and interactive modes for flexibility.
+- **Cryptocurrency Coverage**: Includes data for multiple cryptocurrencies, including Bitcoin, Ethereum, and Solana.
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/crypto-data-engineering.git
+cd crypto-data-engineering
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your API keys and database configuration
+```
+
+## Usage
+
+### Example Usage Script
+
+The `example_usage.py` script provides different ways to interact with the RAG system:
+
+1. **Single Query Mode**:
+```bash
+python example_usage.py --query "What is the current price of Bitcoin?"
+```
+
+2. **Batch Mode** (processes a set of predefined queries):
+```bash
+python example_usage.py --batch
+```
+
+3. **Interactive Mode** (chat-like interface):
+```bash
+python example_usage.py --interactive
+```
+
+### Direct API Usage
+
+You can also use the RAG system programmatically in your own code:
+
+```python
+from langchain_rag import CryptoRAGSystem
+
+# Initialize the RAG system
+rag_system = CryptoRAGSystem(mock_mode=True)
+
+# Get a response to a query
+response = rag_system.chat("What are people saying about cryptocurrency regulations?")
+print(response)
+```
+
+## Migration from Original Implementation
+
+To migrate existing embeddings to the LangChain format:
+
+```bash
+python migrate_to_langchain.py --batch-size 50 --mock
+```
+
+## Comparing RAG Implementations
+
+To compare the LangChain RAG implementation with previous implementations:
+
+```bash
+python compare_rag_implementations.py --query "Bitcoin" --mock --full
+```
+
+## Development
+
+- **Adding New Cryptocurrencies**: Extend the mock implementation in `langchain_rag.py` to support additional cryptocurrencies.
+- **Custom Responses**: Implement special case handling for specific types of queries like regulations, mining, or NFTs.
+- **Improving Embeddings**: Enhance the embedding generation process for better semantic matching.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

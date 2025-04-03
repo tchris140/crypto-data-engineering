@@ -44,6 +44,14 @@ elif [ "$1" = "reddit" ]; then\n\
     python Reddit_scraper.py "${@:2}"\n\
 elif [ "$1" = "rag" ]; then\n\
     python improved_RAG.py "${@:2}"\n\
+elif [ "$1" = "langchain-rag" ]; then\n\
+    python langchain_rag.py "${@:2}"\n\
+elif [ "$1" = "example" ]; then\n\
+    python example_usage.py "${@:2}"\n\
+elif [ "$1" = "migrate" ]; then\n\
+    python migrate_to_langchain.py "${@:2}"\n\
+elif [ "$1" = "compare" ]; then\n\
+    python compare_rag_implementations.py "${@:2}"\n\
 elif [ "$1" = "test" ]; then\n\
     python test_pgvector.py\n\
 elif [ "$1" = "check" ]; then\n\
@@ -58,12 +66,16 @@ else\n\
     echo "Usage: docker run [options] <image> [command] [args]"\n\
     echo ""\n\
     echo "Commands:"\n\
-    echo "  defi      Run DeFi Llama scraper"\n\
-    echo "  reddit    Run Reddit scraper"\n\
-    echo "  rag       Run improved RAG system"\n\
-    echo "  test      Run pgvector tests"\n\
-    echo "  check     Run database checks"\n\
-    echo "  lineage   Generate data lineage visualizations"\n\
+    echo "  defi           Run DeFi Llama scraper"\n\
+    echo "  reddit         Run Reddit scraper"\n\
+    echo "  rag            Run improved RAG system"\n\
+    echo "  langchain-rag  Run LangChain RAG implementation"\n\
+    echo "  example        Run example usage script with interactive or batch mode"\n\
+    echo "  migrate        Run migration script to convert embeddings to LangChain format"\n\
+    echo "  compare        Compare different RAG implementations"\n\
+    echo "  test           Run pgvector tests"\n\
+    echo "  check          Run database checks"\n\
+    echo "  lineage        Generate data lineage visualizations"\n\
 fi' > /app/entrypoint.sh
 
 RUN chmod +x /app/entrypoint.sh

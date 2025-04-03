@@ -13,6 +13,16 @@ CREATE TABLE IF NOT EXISTS reddit_embeddings (
     embedding_vector vector(1536)
 );
 
+-- LangChain PGVector collection table
+CREATE TABLE IF NOT EXISTS langchain_pg_embedding (
+    uuid UUID PRIMARY KEY,
+    collection_id TEXT NOT NULL,
+    embedding vector(1536),
+    document JSONB,
+    cmetadata JSONB,
+    custom_id TEXT
+);
+
 CREATE TABLE IF NOT EXISTS coin_data_structured (
     "Name" TEXT,
     "Symbol" TEXT,
@@ -30,6 +40,8 @@ CREATE INDEX IF NOT EXISTS idx_coin_name ON coin_data_structured("Name");
 
 -- Create vector indexes for similarity searches
 CREATE INDEX IF NOT EXISTS idx_reddit_vector ON reddit_embeddings USING ivfflat (embedding_vector vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX IF NOT EXISTS idx_langchain_vector ON langchain_pg_embedding USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX IF NOT EXISTS idx_langchain_collection ON langchain_pg_embedding(collection_id);
 
 -- Grant permissions
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO CURRENT_USER; 

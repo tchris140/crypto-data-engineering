@@ -65,24 +65,30 @@ show_help() {
     echo "Usage: ./setup.sh [command]"
     echo ""
     echo "Commands:"
-    echo "  start          Build and start all containers"
-    echo "  stop           Stop all containers"
-    echo "  restart        Restart all containers"
-    echo "  logs           Show logs from all containers"
-    echo "  defi           Run DeFi Llama scraper"
-    echo "  reddit         Run Reddit scraper"
-    echo "  rag [query]    Run improved RAG system with optional query"
-    echo "  test           Run pgvector tests"
-    echo "  check          Run database checks"
-    echo "  mock-all       Run all components in mock mode"
-    echo "  lineage        Generate data lineage visualizations"
-    echo "  clean          Remove all containers and volumes"
-    echo "  help           Show this help message"
+    echo "  start           Build and start all containers"
+    echo "  stop            Stop all containers"
+    echo "  restart         Restart all containers"
+    echo "  logs            Show logs from all containers"
+    echo "  defi            Run DeFi Llama scraper"
+    echo "  reddit          Run Reddit scraper"
+    echo "  rag [query]     Run improved RAG system with optional query"
+    echo "  langchain [query] Run LangChain RAG implementation with optional query"
+    echo "  example         Run example usage script"
+    echo "  migrate         Run migration script to LangChain format"
+    echo "  compare [query] Compare RAG implementations with optional query"
+    echo "  test            Run pgvector tests"
+    echo "  check           Run database checks"
+    echo "  mock-all        Run all components in mock mode"
+    echo "  lineage         Generate data lineage visualizations"
+    echo "  clean           Remove all containers and volumes"
+    echo "  help            Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./setup.sh start"
     echo "  ./setup.sh defi --mock"
     echo "  ./setup.sh rag \"Bitcoin price prediction\""
+    echo "  ./setup.sh langchain \"Ethereum gas fees\""
+    echo "  ./setup.sh example --batch"
 }
 
 # Process commands
@@ -120,6 +126,28 @@ case "$1" in
         print_message "Running RAG system with query: '$query'..."
         $DOCKER_COMPOSE run --rm app rag --query "$query" "${@:2}"
         ;;
+    langchain)
+        query="${2:-Ethereum}"
+        shift
+        print_message "Running LangChain RAG implementation with query: '$query'..."
+        $DOCKER_COMPOSE run --rm app langchain-rag --query "$query" "${@:2}"
+        ;;
+    example)
+        print_message "Running example usage script..."
+        shift
+        $DOCKER_COMPOSE run --rm app example "$@"
+        ;;
+    migrate)
+        print_message "Running migration script to LangChain format..."
+        shift
+        $DOCKER_COMPOSE run --rm app migrate "$@"
+        ;;
+    compare)
+        query="${2:-Ethereum}"
+        shift
+        print_message "Comparing RAG implementations with query: '$query'..."
+        $DOCKER_COMPOSE run --rm app compare --query "$query" "${@:2}"
+        ;;
     test)
         print_message "Running pgvector tests..."
         $DOCKER_COMPOSE run --rm app test
@@ -134,8 +162,10 @@ case "$1" in
         $DOCKER_COMPOSE run --rm app defi --mock
         print_message "2. Running Reddit scraper in mock mode..."
         $DOCKER_COMPOSE run --rm app reddit --mock
-        print_message "3. Running RAG system in mock mode..."
+        print_message "3. Running improved RAG system in mock mode..."
         $DOCKER_COMPOSE run --rm app rag --mock --query "Bitcoin"
+        print_message "4. Running LangChain RAG system in mock mode..."
+        $DOCKER_COMPOSE run --rm app langchain-rag --mock --query "Bitcoin"
         ;;
     lineage)
         print_message "Generating data lineage visualizations..."
