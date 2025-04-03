@@ -19,26 +19,32 @@ import psycopg2
 from dotenv import load_dotenv
 from sklearn.metrics.pairwise import cosine_similarity
 
-# LangChain imports - updated to recommended paths
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import PGVector
-from langchain.schema import Document
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains import create_sql_query_chain
-from langchain.chains import RetrievalQA
-from langchain.schema.runnable import RunnablePassthrough
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-# Import data lineage
-from data_lineage import get_lineage_tracker, LineageContext
-
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Gracefully handle imports for LangChain
+HAVE_LANGCHAIN = True
+try:
+    from langchain_community.embeddings import OpenAIEmbeddings
+    from langchain_community.vectorstores import PGVector
+    from langchain.schema import Document
+    from langchain_openai import ChatOpenAI
+    from langchain.prompts import ChatPromptTemplate
+    from langchain.chains import create_sql_query_chain
+    from langchain.chains import RetrievalQA
+    from langchain.schema.runnable import RunnablePassthrough
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError as e:
+    logger.warning(f"Error importing LangChain components: {e}")
+    logger.info("Using mock implementations for LangChain")
+    HAVE_LANGCHAIN = False
+
+# Import data lineage tracking
+from data_lineage import DataLineage
 
 # Global flag for mock mode
 MOCK_MODE = False
@@ -76,13 +82,13 @@ class CryptoRAGSystem:
     - Lineage tracking for data provenance
     """
     
-    def __init__(self, mock_mode=False):
+    def __init__(self, mock_mode: bool = False):
         """Initialize the RAG system with necessary components"""
         global MOCK_MODE
-        MOCK_MODE = mock_mode
+        MOCK_MODE = mock_mode or 'CI' in os.environ
         
         # Initialize lineage tracker
-        self.lineage = get_lineage_tracker()
+        self.lineage = DataLineage()
         
         if not MOCK_MODE:
             # Set up LangChain components

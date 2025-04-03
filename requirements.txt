@@ -14,6 +14,7 @@ openai>=1.6.1
 
 # Database connections
 psycopg2-binary==2.9.9
+pgvector>=0.2.0
 
 # Formatting and display
 tabulate==0.9.0
