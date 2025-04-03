@@ -1,23 +1,78 @@
-# Crypto Data Engineering Project
+# Crypto Data Engineering
 
-## Overview  
-This project is designed to collect, process, and store structured and unstructured cryptocurrency data. The goal is to build a scalable data pipeline that aggregates information from multiple sources, including, DeFiLlama for structured data and reddit or twitter for unstructured data. Future enhancements will include sentiment analysis from the unstructured data, as well as a chatbot for querying insights.
+This repository contains scripts for scraping cryptocurrency data from various sources, processing the data, and storing it in a PostgreSQL database.
 
-## Features  
-- Scrapes structured cryptocurrency data, including price, volume, and market metrics.  
-- Stores data in a PostgreSQL database for efficient querying and scalability.  
-- Automates periodic data collection to ensure real-time updates.  
-- Future development includes sentiment analysis and an LLM-powered chatbot for information retrieval.  
+## Reddit Data Scraper
 
-## Tech Stack  
-- **Python** – Data scraping and processing  
-- **PostgreSQL** – Database for structured data storage
-- **MongoDB** - Database for unstructured data storage
-- **Jira & GitHub** – Project management and version control
+The `Reddit_scraper.py` script fetches recent posts from the r/cryptocurrency subreddit, generates embeddings using OpenAI's API, and stores the data in a PostgreSQL database.
 
-## Getting Started  
+### Features
 
-### 1. Clone the Repository  
+- Fetches recent cryptocurrency posts from Reddit
+- Generates embeddings for each post using OpenAI's API
+- Stores the data in a PostgreSQL database
+- Handles error cases gracefully
+- Includes a mock mode for testing without making actual API calls
+
+### Setup
+
+1. Clone this repository
+2. Install the required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Create a `.env` file with the following environment variables:
+   ```
+   # Reddit API credentials
+   REDDIT_CLIENT_ID=your_client_id_here
+   REDDIT_CLIENT_SECRET=your_client_secret_here
+   REDDIT_USER_AGENT=your_user_agent_here
+
+   # OpenAI API key
+   OPENAI_API_KEY=your_openai_key_here
+
+   # Database credentials
+   DB_USER=your_db_user
+   DB_PASSWORD=your_db_password
+   DB_HOST=your_db_host
+   DB_PORT=your_db_port
+   DB_NAME=your_db_name
+   ```
+
+### Usage
+
+Run the script normally to fetch real data:
 ```bash
-git clone https://github.com/tchris140/crypto-data-engineering.git
-cd crypto-data-engineering
+python Reddit_scraper.py
+```
+
+Run in mock mode for testing (no actual API calls):
+```bash
+python Reddit_scraper.py --mock
+```
+
+Run the test suite:
+```bash
+python test_reddit_scraper.py
+```
+
+### GitHub Actions
+
+This repository includes a GitHub Actions workflow that runs the script every 6 hours. To use this:
+
+1. Set up the following secrets in your GitHub repository:
+   - `REDDIT_CLIENT_ID`
+   - `REDDIT_CLIENT_SECRET`
+   - `REDDIT_USER_AGENT`
+   - `OPENAI_API_KEY`
+   - `DB_USER`
+   - `DB_PASSWORD`
+   - `DB_HOST`
+   - `DB_PORT`
+   - `DB_NAME`
+
+2. The workflow will automatically run on schedule, or you can trigger it manually from the Actions tab.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. 
