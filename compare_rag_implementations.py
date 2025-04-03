@@ -15,6 +15,7 @@ import logging
 import time
 import os
 import sys
+import subprocess
 from pathlib import Path
 
 # Add the project root to Python path to ensure imports work
@@ -27,8 +28,22 @@ try:
 except ImportError as e:
     logging.error(f"Error importing tabulate: {e}")
     print("Installing tabulate...")
-    os.system("pip install tabulate")
-    from tabulate import tabulate
+    # Use safer subprocess approach instead of os.system
+    try:
+        # Security note: This is a safe use of subprocess because:
+        # 1. We're using a fixed command (not user input)
+        # 2. We're using a list form (not shell=True)
+        # 3. We're only installing a known package from PyPI
+        # The bandit warning can be safely ignored in this case.
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "tabulate"], 
+                           stdout=subprocess.PIPE, 
+                           stderr=subprocess.PIPE)
+        from tabulate import tabulate
+        logger.info("Tabulate package installed successfully")
+    except Exception as e:
+        logger.error(f"Failed to install tabulate package: {e}")
+        logger.error("Please install it manually with: pip install tabulate")
+        sys.exit(1)
 
 # Set up logging
 logging.basicConfig(

@@ -16,6 +16,7 @@ from typing import List, Dict, Any
 import random
 import numpy as np
 from pathlib import Path
+import secrets
 
 # Add the project root to Python path to ensure imports work
 project_root = Path(__file__).resolve().parent
@@ -81,6 +82,20 @@ except ImportError as e:
         def __init__(self, page_content, metadata=None):
             self.page_content = page_content
             self.metadata = metadata or {}
+
+def generate_secure_vector(size):
+    """Generate a cryptographically secure random vector for mocks.
+    
+    This is only used for testing and shouldn't have any security implications,
+    but we use a stronger random generator to avoid security warnings.
+    
+    Args:
+        size: The size of the vector to generate
+    
+    Returns:
+        A numpy array of random floats between 0 and 1
+    """
+    return np.array([secrets.SystemRandom().random() for _ in range(size)])
 
 class MockCursor:
     """Mock database cursor for testing"""
@@ -152,10 +167,10 @@ class MockConnection:
 class MockEmbeddings:
     """Mock embeddings for testing"""
     def embed_documents(self, texts):
-        return [[random.random() for _ in range(1536)] for _ in texts]
+        return [generate_secure_vector(1536) for _ in texts]
     
     def embed_query(self, text):
-        return [random.random() for _ in range(1536)]
+        return generate_secure_vector(1536)
 
 class MockVectorStore:
     """Mock vector store for LangChain"""

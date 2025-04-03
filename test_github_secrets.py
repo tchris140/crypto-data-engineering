@@ -2,6 +2,8 @@ import os
 import sys
 import argparse
 import logging
+import secrets
+import string
 
 # Configure logging
 logging.basicConfig(
@@ -12,6 +14,21 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+def generate_safe_dummy_value(length=12):
+    """Generate a secure random string for dummy credentials.
+    
+    This is used only for testing and doesn't contain actual credentials.
+    Uses a secure random generator rather than hardcoded values.
+    
+    Args:
+        length: Length of the random string to generate
+        
+    Returns:
+        A random string of specified length
+    """
+    characters = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(characters) for _ in range(length))
 
 def test_environment_variables():
     """Test if all required environment variables are set."""
@@ -93,16 +110,16 @@ def main():
     
     if args.mock:
         logger.info("Running in MOCK mode - using mock data and services")
-        # Set environment variables for testing in mock mode
-        os.environ["DB_HOST"] = "mock_host"
-        os.environ["DB_NAME"] = "mock_db"
-        os.environ["DB_USER"] = "mock_user"
-        os.environ["DB_PASSWORD"] = "mock_password"
+        # Set environment variables for testing in mock mode with secure random values
+        os.environ["DB_HOST"] = "localhost"
+        os.environ["DB_NAME"] = "test_db"
+        os.environ["DB_USER"] = "test_user"
+        os.environ["DB_PASSWORD"] = generate_safe_dummy_value()
         os.environ["DB_PORT"] = "5432"
-        os.environ["cmc_api_key"] = "mock_cmc_key"
-        os.environ["OPENAI_API_KEY"] = "mock_openai_key"
-        os.environ["REDDIT_CLIENT_ID"] = "mock_reddit_id"
-        os.environ["REDDIT_CLIENT_SECRET"] = "mock_reddit_secret"
+        os.environ["cmc_api_key"] = generate_safe_dummy_value(32)
+        os.environ["OPENAI_API_KEY"] = generate_safe_dummy_value(48)
+        os.environ["REDDIT_CLIENT_ID"] = generate_safe_dummy_value(24)
+        os.environ["REDDIT_CLIENT_SECRET"] = generate_safe_dummy_value(36)
     
     # Check environment variables
     env_status = test_environment_variables()

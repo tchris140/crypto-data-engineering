@@ -5,6 +5,8 @@ import sys
 import logging
 from tabulate import tabulate
 from dotenv import load_dotenv
+import sqlalchemy
+from sqlalchemy import MetaData, Table, select
 
 # Set up logging
 logging.basicConfig(
@@ -86,58 +88,46 @@ def query_database_info(engine):
         logger.error(f"Error querying database information: {e}")
         return False
 
-def query_table_data(engine, table_name, limit=10):
-    """Query and display sample data from the table"""
-    try:
-        # Check if table exists
-        with engine.connect() as conn:
-            check_query = text(f"""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = '{table_name}'
-                );
-            """)
-            exists = conn.execute(check_query).scalar()
-            
-            if not exists:
-                logger.error(f"Table '{table_name}' does not exist in the database")
-                return False
-            
-            # Get row count
-            count_query = text(f"SELECT COUNT(*) FROM {table_name};")
-            row_count = conn.execute(count_query).scalar()
-            logger.info(f"Table '{table_name}' has {row_count} rows")
-            
-            if row_count == 0:
-                logger.warning(f"Table '{table_name}' is empty")
-                return True
-            
-            # Get column information
-            columns_query = text(f"""
-                SELECT column_name, data_type 
-                FROM information_schema.columns 
-                WHERE table_name = '{table_name}'
-                ORDER BY ordinal_position;
-            """)
-            columns = conn.execute(columns_query).fetchall()
-            
-            logger.info(f"Columns in table '{table_name}':")
-            for col in columns:
-                logger.info(f"  - {col[0]} ({col[1]})")
-            
-            # Query sample data
-            logger.info(f"Sample data from table '{table_name}' (limit {limit}):")
-            sample_query = text(f"SELECT * FROM {table_name} LIMIT {limit};")
-            sample_data = pd.read_sql(sample_query, conn)
-            
-            # Display formatted table
-            print("\n" + tabulate(sample_data, headers='keys', tablefmt='psql'))
-            
-            return True
-    except Exception as e:
-        logger.error(f"Error querying table data: {e}")
-        return False
+def query_table_data(table_name, limit=5):
+    """
+    Query and display a sample of data from a specified table.
+    
+    Args:
+        table_name (str): Name of the table to query
+        limit (int): Number of rows to return
+        
+    Returns:
+        DataFrame: Sample data from the table
+    """
+    engine = create_database_engine()
+    
+    if engine:
+        try:
+            with engine.connect() as conn:
+                # Use SQLAlchemy's metadata and Table constructs to safely reference tables
+                metadata = MetaData()
+                
+                # Reflect the table structure - this is safe from SQL injection
+                table = Table(table_name, metadata, autoload_with=engine)
+                
+                # Build a safe query using SQLAlchemy constructs
+                query = select(table).limit(limit)
+                result = conn.execute(query)
+                
+                # Convert to DataFrame
+                sample_data = pd.DataFrame(result.fetchall(), columns=result.keys())
+                
+                if not sample_data.empty:
+                    print(f"\nSample data from {table_name}:")
+                    print(sample_data)
+                else:
+                    print(f"No data found in {table_name}")
+                
+                return sample_data
+        except Exception as e:
+            print(f"Error querying {table_name}: {e}")
+            return None
+    return None
 
 def main():
     """Main function to check database connectivity and data"""
@@ -162,7 +152,7 @@ def main():
         table_name = 'coin_data_structured'
         
         # Query table data
-        query_table_data(engine, table_name)
+        query_table_data(table_name)
         
         logger.info("Database check completed successfully")
         
