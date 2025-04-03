@@ -65,36 +65,46 @@ The Retrieval-Augmented Generation (RAG) system provides AI-powered cryptocurren
 
 ### DeFi Llama Data Collection
 
-```bash
-# Run the DeFi Llama scraper
-python DefiLlama_scraper.py
+#### Example: Fetching and Storing TVL Data
 
-# Upload data to PostgreSQL
-python DefiLlama_to_postgresql.py
-
-# Verify the data
-python check.py
-```
+1. Run the DeFi Llama scraper to fetch the latest TVL data:
+   ```bash
+   python DefiLlama_scraper.py
+   ```
+2. Upload the fetched data to PostgreSQL:
+   ```bash
+   python DefiLlama_to_postgresql.py
+   ```
+3. Verify the data integrity and connectivity:
+   ```bash
+   python check.py
+   ```
 
 ### Reddit Data Collection
 
-```bash
-# Run the Reddit scraper
-python Reddit_scraper.py
+#### Example: Analyzing Cryptocurrency Discussions
 
-# Run in mock mode (for testing)
-python Reddit_scraper.py --mock
-```
+1. Run the Reddit scraper to collect posts from cryptocurrency subreddits:
+   ```bash
+   python Reddit_scraper.py
+   ```
+2. Use mock mode for testing without API calls:
+   ```bash
+   python Reddit_scraper.py --mock
+   ```
 
 ### Conversational Crypto Assistant
 
-```bash
-# Run the improved RAG system with a query
-python improved_RAG.py --query "Bitcoin"
+#### Example: Generating Insights with RAG
 
-# Test in mock mode
-python improved_RAG.py --mock --query "Ethereum"
-```
+1. Run the improved RAG system to generate insights based on a query:
+   ```bash
+   python improved_RAG.py --query "Bitcoin"
+   ```
+2. Test the system in mock mode:
+   ```bash
+   python improved_RAG.py --mock --query "Ethereum"
+   ```
 
 ## Automated Workflows
 
@@ -116,4 +126,63 @@ This repository includes GitHub Actions workflows that run on a schedule. To ena
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. 
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+# Project Goal
+
+The primary goal of this project is to provide a comprehensive data engineering solution for collecting, processing, and analyzing cryptocurrency data from various sources. By integrating multiple data pipelines, the project aims to offer insights into market trends and discussions, enhancing decision-making for cryptocurrency enthusiasts and analysts.
+
+# Visual Aids
+
+```mermaid
+graph TD;
+    A[DeFi Llama Scraper] -->|Fetches TVL & Market Data| B[PostgreSQL Storage];
+    C[Reddit Scraper] -->|Fetches Posts & Embeddings| B;
+    B --> D[RAG System];
+    D -->|Generates Insights| E[User];
+```
+
+# Detailed Examples
+
+## DeFi Llama Data Collection
+
+### Example: Fetching and Storing TVL Data
+
+1. Run the DeFi Llama scraper to fetch the latest TVL data:
+   ```bash
+   python DefiLlama_scraper.py
+   ```
+2. Upload the fetched data to PostgreSQL:
+   ```bash
+   python DefiLlama_to_postgresql.py
+   ```
+3. Verify the data integrity and connectivity:
+   ```bash
+   python check.py
+   ```
+
+## Reddit Data Collection
+
+### Example: Analyzing Cryptocurrency Discussions
+
+1. Run the Reddit scraper to collect posts from cryptocurrency subreddits:
+   ```bash
+   python Reddit_scraper.py
+   ```
+2. Use mock mode for testing without API calls:
+   ```bash
+   python Reddit_scraper.py --mock
+   ```
+
+## Conversational Crypto Assistant
+
+### Example: Generating Insights with RAG
+
+1. Run the improved RAG system to generate insights based on a query:
+   ```bash
+   python improved_RAG.py --query "Bitcoin"
+   ```
+2. Test the system in mock mode:
+   ```bash
+   python improved_RAG.py --mock --query "Ethereum"
+   ``` 
