@@ -14,6 +14,7 @@ from psycopg2.extras import execute_values
 from datetime import datetime, timezone, timedelta
 import prawcore
 import requests
+import numpy as np
 
 # Set up logging
 logging.basicConfig(
@@ -188,7 +189,7 @@ def fetch_recent_posts(subreddit, hours=24):
         raise
 
 def insert_posts_to_db(posts, engine):
-    """Insert posts into database with error handling."""
+    """Insert posts into database with vector embeddings."""
     if not posts:
         logger.info("No new posts to insert")
         return
@@ -199,65 +200,44 @@ def insert_posts_to_db(posts, engine):
     ])
     
     try:
-        # For mock mode / SQLite in-memory, create the table first if it doesn't exist
-        if MOCK_MODE:
-            with engine.connect() as conn:
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS reddit_embeddings (
-                        post_id TEXT PRIMARY KEY,
-                        title TEXT,
-                        text TEXT,
-                        score INTEGER,
-                        num_comments INTEGER,
-                        created_utc TEXT,
-                        embedding TEXT
-                    )
-                """))
-                conn.commit()
-        
         conn = engine.raw_connection()
         cursor = conn.cursor()
         
-        if MOCK_MODE:
-            # SQLite doesn't support ON CONFLICT
-            insert_query = """
-                INSERT OR REPLACE INTO reddit_embeddings 
-                    (post_id, title, text, score, num_comments, created_utc, embedding)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """
-            
-            records = [
-                (row.post_id, row.title, row.text, row.score, 
-                 row.num_comments, row.created_utc.isoformat() if hasattr(row.created_utc, 'isoformat') else str(row.created_utc), 
-                 f"[{','.join(map(str, row.embedding))}]")
-                for row in df.itertuples(index=False)
-            ]
-            
-            for record in records:
-                cursor.execute(insert_query, record)
-        else:
-            # PostgreSQL with ON CONFLICT
-            insert_query = """
-                INSERT INTO reddit_embeddings 
-                    (post_id, title, text, score, num_comments, created_utc, embedding)
-                VALUES %s
-                ON CONFLICT (post_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    text = EXCLUDED.text,
-                    score = EXCLUDED.score,
-                    num_comments = EXCLUDED.num_comments,
-                    created_utc = EXCLUDED.created_utc,
-                    embedding = EXCLUDED.embedding;
-            """
-            
-            records = [
-                (row.post_id, row.title, row.text, row.score, 
-                 row.num_comments, row.created_utc, 
-                 f"[{','.join(map(str, row.embedding))}]")
-                for row in df.itertuples(index=False)
-            ]
-            
-            execute_values(cursor, insert_query, records)
+        # Check if we need to add the vector column
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'reddit_embeddings' AND column_name = 'embedding_vector')")
+        has_vector_column = cursor.fetchone()[0]
+        
+        if not has_vector_column:
+            logger.info("Adding embedding_vector column to reddit_embeddings table")
+            cursor.execute("ALTER TABLE reddit_embeddings ADD COLUMN embedding_vector vector(1536)")
+            conn.commit()
+        
+        # PostgreSQL with ON CONFLICT
+        insert_query = """
+            INSERT INTO reddit_embeddings 
+                (post_id, title, text, score, num_comments, created_utc, embedding, embedding_vector)
+            VALUES %s
+            ON CONFLICT (post_id) DO UPDATE SET
+                title = EXCLUDED.title,
+                text = EXCLUDED.text,
+                score = EXCLUDED.score,
+                num_comments = EXCLUDED.num_comments,
+                created_utc = EXCLUDED.created_utc,
+                embedding = EXCLUDED.embedding,
+                embedding_vector = EXCLUDED.embedding_vector;
+        """
+        
+        records = [
+            (row.post_id, row.title, row.text, row.score, 
+             row.num_comments, row.created_utc, 
+             f"[{','.join(map(str, row.embedding))}]",
+             np.array(row.embedding).tolist())
+            for row in df.itertuples(index=False)
+        ]
+        
+        execute_values(cursor, insert_query, records, template="""
+            (%s, %s, %s, %s, %s, %s, %s, %s::vector)
+        """)
         
         conn.commit()
         logger.info(f"Successfully inserted {len(posts)} posts into database")

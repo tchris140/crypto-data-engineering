@@ -26,6 +26,7 @@ The Reddit pipeline collects and analyzes cryptocurrency discussions:
 
 - **Reddit_scraper.py**: Fetches posts from r/cryptocurrency and generates embeddings
 - Supports both normal and mock mode for testing
+- **Data Storage**: Unstructured data, such as embeddings, is stored in PostgreSQL using the pgvector extension, allowing for efficient similarity searches and vector operations directly within the database.
 
 ### 3. Conversational RAG System
 
@@ -59,6 +60,23 @@ The Retrieval-Augmented Generation (RAG) system provides AI-powered cryptocurren
    DB_NAME=your_database_name
    DB_USER=your_database_user
    DB_PASSWORD=your_database_password
+   ```
+4. Set up PostgreSQL with pgvector extension:
+   ```sql
+   -- Install the pgvector extension (requires PostgreSQL admin privileges)
+   CREATE EXTENSION IF NOT EXISTS vector;
+   
+   -- Create reddit_embeddings table with vector column
+   CREATE TABLE IF NOT EXISTS reddit_embeddings (
+       post_id TEXT PRIMARY KEY,
+       title TEXT,
+       text TEXT,
+       score INTEGER,
+       num_comments INTEGER,
+       created_utc TEXT,
+       embedding TEXT,
+       embedding_vector vector(1536)
+   );
    ```
 
 ## Usage
@@ -185,4 +203,28 @@ graph TD;
 2. Test the system in mock mode:
    ```bash
    python improved_RAG.py --mock --query "Ethereum"
-   ``` 
+   ```
+
+## Testing
+
+### Database Vector Search Testing
+
+To verify that the pgvector extension is properly installed and working:
+
+```bash
+# Run the pgvector test script
+python test_pgvector.py
+```
+
+This script:
+1. Checks if the pgvector extension is installed
+2. Verifies the table schema has vector columns
+3. Tests vector search functionality with a sample query
+4. Outputs detailed logs of each step
+
+### Reddit Scraper Testing
+
+```bash
+# Run the Reddit scraper tests
+python test_reddit_scraper.py
+``` 

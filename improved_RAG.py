@@ -103,22 +103,51 @@ def get_db_connection():
 
 # Function to retrieve relevant Reddit data (unstructured)
 def retrieve_reddit_data(query, db_connection, top_k=3):
-    """Retrieve top k most relevant Reddit posts based on semantic similarity."""
+    """Retrieve top k most relevant Reddit posts based on semantic similarity using pgvector."""
     # Generate the embedding for the query using OpenAI
     query_embedding = get_embedding(query)
     
     # Connect to the database
     cursor = db_connection.cursor()
     
-    # Query to fetch embeddings from the Reddit posts
-    cursor.execute("SELECT post_id, title, text, embedding FROM reddit_embeddings")
-    rows = cursor.fetchall()
-    
-    if not rows:
-        return []
-    
-    # Extract embeddings and calculate similarity
     try:
+        # First check if our table is using the vector column
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'reddit_embeddings' AND column_name = 'embedding_vector')")
+        has_vector_column = cursor.fetchone()[0]
+        
+        if has_vector_column:
+            logger.info("Using pgvector for similarity search")
+            # Use pgvector's cosine distance operator (<->) for similarity search
+            cursor.execute("""
+                SELECT post_id, title, text, 1 - (embedding_vector <-> %s::vector) as similarity 
+                FROM reddit_embeddings
+                WHERE embedding_vector IS NOT NULL
+                ORDER BY embedding_vector <-> %s::vector
+                LIMIT %s
+            """, (query_embedding, query_embedding, top_k))
+            
+            rows = cursor.fetchall()
+            
+            if rows:
+                top_posts = []
+                for row in rows:
+                    top_posts.append({
+                        "post_id": row[0],
+                        "title": row[1],
+                        "content": row[2],
+                        "similarity": row[3]
+                    })
+                logger.info(f"Found {len(top_posts)} similar posts using pgvector")
+                return top_posts
+        
+        # Fallback to the original in-memory approach if pgvector is not available
+        logger.info("Falling back to in-memory similarity calculation")
+        cursor.execute("SELECT post_id, title, text, embedding FROM reddit_embeddings")
+        rows = cursor.fetchall()
+        
+        if not rows:
+            return []
+        
         embeddings = np.array([np.array(ast.literal_eval(row[3])) for row in rows])  # Convert string to list
         similarities = cosine_similarity([query_embedding], embeddings)[0]
         
@@ -137,7 +166,7 @@ def retrieve_reddit_data(query, db_connection, top_k=3):
         
         return top_posts
     except Exception as e:
-        logger.error(f"Error processing Reddit data: {e}")
+        logger.error(f"Error retrieving Reddit data: {e}")
         return []
 
 # Function to retrieve relevant structured data (crypto prices, market cap, etc.)
