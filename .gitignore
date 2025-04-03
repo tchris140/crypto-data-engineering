@@ -45,3 +45,13 @@ env/
 # OS
 .DS_Store
 Thumbs.db 
+# Temporary test files
+debug_output.txt
+eth_*.txt
+temp_fix.py
+test_output.py
+test_output.txt
+
+# Generated data files
+output_data.csv
+missing_coins.txt

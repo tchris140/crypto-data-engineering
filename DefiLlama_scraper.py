@@ -57,14 +57,14 @@ def get_cmc_coin_mapping():
     
     headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
     map_response = requests.get(CMC_MAP_URL, headers=headers)
-    
+
     if map_response.status_code == 200:
         cmc_data = map_response.json()["data"]
         
         # Create a dictionary mapping names & slugs to symbols
         cmc_map = {coin["name"]: coin["symbol"] for coin in cmc_data}
         cmc_map.update({coin["slug"]: coin["symbol"] for coin in cmc_data})
-        
+
         logger.info(f"Successfully fetched {len(cmc_map)} coin mappings")
         return cmc_map
     else:
@@ -79,7 +79,7 @@ def get_top_chains_from_defi_llama(limit=50):
     
     if response.status_code == 200:
         data = response.json()
-        
+
         # Sort by TVL and filter out excluded names
         top_chains = sorted(
             [chain for chain in data if chain.get('name') not in EXCLUDED_NAMES], 
@@ -202,20 +202,20 @@ def main():
     # Collect coins with symbols
     coins = []
     missing_coins = []
-    
+
     for blockchain in top_chains:
         name = blockchain.get('name', 'N/A')
         tvl = blockchain.get('tvl', 0)
-        
+
         symbol = match_coin_symbol(name, cmc_map)
         
         if not symbol:
             logger.warning(f"No symbol found for {name}, skipping market data fetch...")
             missing_coins.append(name)
             continue
-        
+
         coins.append({"name": name, "symbol": symbol, "tvl": tvl})
-    
+
     # Batch process market data requests
     batch_size = 10
     all_processed_data = []
@@ -229,12 +229,12 @@ def main():
         # Process the data for each coin in the batch
         processed_batch = process_coin_data(batch, market_data)
         all_processed_data.extend(processed_batch)
-        
+
         # Sleep to avoid hitting API limits
         if i + batch_size < len(coins):
             logger.info("Sleeping to respect API rate limits...")
             time.sleep(5)
-    
+
     # Log missing coins
     if missing_coins:
         with open("missing_coins.txt", "w") as f:

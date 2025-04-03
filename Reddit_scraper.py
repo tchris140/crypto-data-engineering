@@ -6,6 +6,7 @@ import psycopg2
 import json
 import logging
 import sys
+import argparse
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 from sqlalchemy import text
@@ -271,33 +272,39 @@ def insert_posts_to_db(posts, engine):
             conn.close()
 
 def main():
-    """Main function to orchestrate the scraping process."""
-    try:
-        # Check for mock mode command line argument
-        if "--mock" in sys.argv:
-            enable_mock_mode()
-            
-        # Load environment variables
-        load_dotenv()
-        
-        # Initialize clients
-        reddit = init_reddit_client()
-        init_openai()
-        engine = get_db_connection()
-        
-        # Fetch and process posts
-        subreddit = reddit.subreddit("cryptocurrency")
-        posts = fetch_recent_posts(subreddit)
-        
-        # Insert into database
-        insert_posts_to_db(posts, engine)
-        
-        logger.info("Script completed successfully")
-        
-    except Exception as e:
-        logger.error(f"Script failed: {e}")
-        raise
+    """Main function to orchestrate the Reddit scraping process"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Reddit Scraper')
+    parser.add_argument('--mock', action='store_true', help='Run in mock mode without real API calls')
+    args = parser.parse_args()
+    
+    if args.mock:
+        enable_mock_mode()
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Initialize clients
+    reddit = init_reddit_client()
+    init_openai()
+    engine = get_db_connection()
+    
+    # Fetch posts from the cryptocurrency subreddit
+    subreddit = reddit.subreddit("cryptocurrency")
+    logger.info(f"Fetching posts from r/{subreddit.display_name}")
+    
+    posts = fetch_recent_posts(subreddit)
+    
+    # Insert posts to database
+    insert_posts_to_db(posts, engine)
+    
+    logger.info(f"Successfully inserted {len(posts)} posts into database")
+    logger.info("Script completed successfully")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.exception("An error occurred")
+        sys.exit(1)
 
