@@ -227,4 +227,162 @@ This script:
 ```bash
 # Run the Reddit scraper tests
 python test_reddit_scraper.py
+```
+
+## System Requirements
+
+- **Python**: 3.8 or higher
+- **PostgreSQL**: 14.0 or higher with superuser privileges (for pgvector installation)
+- **pgvector**: 0.4.0 or higher
+- **API Access**: CoinMarketCap, Reddit, and OpenAI accounts with API keys
+- **Memory**: Minimum 4GB RAM recommended for vector operations
+
+## File Structure
+
+```
+.
+├── .github/workflows/           # GitHub Actions workflow configuration
+│   ├── crypto_data_pipeline.yml # Workflow for DeFi Llama pipeline
+│   └── reddit_scraper.yml       # Workflow for Reddit pipeline
+├── DefiLlama_scraper.py         # Fetches blockchain TVL and market data
+├── DefiLlama_to_postgresql.py   # Stores DeFi data in PostgreSQL
+├── DefiLlama_mock.py            # Mock version for testing without API calls
+├── Reddit_scraper.py            # Fetches Reddit posts and generates embeddings
+├── test_reddit_scraper.py       # Tests for Reddit scraper functionality
+├── RAG.py                       # Original Retrieval-Augmented Generation system
+├── improved_RAG.py              # Enhanced conversational RAG system
+├── check.py                     # Database connectivity and data quality checks
+├── test_pgvector.py             # Tests for pgvector functionality
+├── confirm_github_ready.py      # Checks if repository is ready for GitHub Actions
+├── test_github_secrets.py       # Tests environment variables for GitHub Actions
+├── requirements.txt             # Project dependencies
+├── .gitignore                   # Git ignore configuration
+├── output_data.csv              # Sample DeFi data output
+├── reddit_crypto_posts.csv      # Sample Reddit data output
+└── README.md                    # Project documentation
+```
+
+## Command-line Options
+
+### DefiLlama_scraper.py
+
+```bash
+# Basic usage (uses real API)
+python DefiLlama_scraper.py
+
+# Mock mode (no API calls)
+python DefiLlama_scraper.py --mock
+
+# Specify output file
+python DefiLlama_scraper.py --output custom_output.csv
+
+# Specify number of chains to fetch (default: 100)
+python DefiLlama_scraper.py --limit 50
+```
+
+### Reddit_scraper.py
+
+```bash
+# Basic usage (uses real API)
+python Reddit_scraper.py
+
+# Mock mode (no API calls)
+python Reddit_scraper.py --mock
+
+# Specify subreddit (default: cryptocurrency)
+python Reddit_scraper.py --subreddit bitcoin
+
+# Specify time window in hours (default: 24)
+python Reddit_scraper.py --hours 48
+```
+
+### improved_RAG.py
+
+```bash
+# Query with real API calls
+python improved_RAG.py --query "Bitcoin price prediction"
+
+# Mock mode (no API calls)
+python improved_RAG.py --mock --query "Ethereum gas fees"
+
+# Specify number of Reddit posts to retrieve (default: 3)
+python improved_RAG.py --query "Solana" --posts 5
+```
+
+### test_pgvector.py
+
+```bash
+# Run pgvector integration tests
+python test_pgvector.py
+```
+
+## Troubleshooting
+
+### pgvector Installation Issues
+
+**Issue**: Error when creating the vector extension
+```
+ERROR: could not open extension control file: No such file or directory
+```
+
+**Solution**: 
+```sql
+-- Install the PostgreSQL development packages first
+sudo apt-get install postgresql-server-dev-14
+
+-- Then clone and install pgvector
+git clone https://github.com/pgvector/pgvector.git
+cd pgvector
+make
+make install
+```
+
+### Database Connection Issues
+
+**Issue**: "Error connecting to the database"
+
+**Solution**: 
+- Verify that PostgreSQL is running: `pg_isready`
+- Check your `.env` file for correct credentials
+- Ensure the database exists: `psql -c "SELECT 1" -d your_database_name`
+
+### API Rate Limiting
+
+**Issue**: "API rate limit exceeded" errors
+
+**Solution**:
+- CoinMarketCap: Upgrade your plan or reduce request frequency
+- Reddit: Implement exponential backoff in your requests
+- OpenAI: Add retry logic with increasing delays
+
+### Vector Search Not Working
+
+**Issue**: Vector similarity search returns incorrect results
+
+**Solution**:
+- Verify pgvector extension: `SELECT * FROM pg_extension WHERE extname = 'vector'`
+- Check embedding dimensions match (should be 1536 for OpenAI)
+- Ensure embeddings are properly cast to vector type
+
+## Advanced Usage
+
+### Creating a Vector Index
+
+For large datasets, create an index to speed up similarity searches:
+
+```sql
+-- Create an index on the embedding_vector column
+CREATE INDEX ON reddit_embeddings USING ivfflat (embedding_vector vector_cosine_ops) WITH (lists = 100);
+
+-- For even better performance with larger datasets:
+CREATE INDEX ON reddit_embeddings USING hnsw (embedding_vector vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+```
+
+### Batch Processing
+
+For processing large amounts of data:
+
+```python
+# Process Reddit posts in batches of 50
+python Reddit_scraper.py --batch_size 50 --total 1000
 ``` 
