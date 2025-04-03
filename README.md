@@ -385,4 +385,79 @@ For processing large amounts of data:
 ```python
 # Process Reddit posts in batches of 50
 python Reddit_scraper.py --batch_size 50 --total 1000
-``` 
+```
+
+## Dockerized Setup
+
+This project can be run using Docker and Docker Compose for easy setup and reproducibility. The included automation script makes it simple to get started.
+
+### Prerequisites
+
+- Docker and Docker Compose installed on your system
+- Git for cloning the repository
+
+### Quick Start
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/crypto-data-engineering.git
+   cd crypto-data-engineering
+   ```
+
+2. Run the setup script:
+   ```bash
+   ./setup.sh start
+   ```
+   This will:
+   - Create a default `.env` file (update with your API keys)
+   - Build and start the Docker containers
+   - Set up the PostgreSQL database with pgvector extension
+
+3. Run components using the setup script:
+   ```bash
+   # Run DeFi Llama scraper
+   ./setup.sh defi
+   
+   # Run Reddit scraper
+   ./setup.sh reddit
+   
+   # Run RAG system with a query
+   ./setup.sh rag "Bitcoin price trends"
+   ```
+
+### Running in Mock Mode
+
+Test the application without using real API calls:
+
+```bash
+# Run all components in mock mode
+./setup.sh mock-all
+
+# Run individual components in mock mode
+./setup.sh defi --mock
+./setup.sh reddit --mock
+./setup.sh rag --mock --query "Ethereum"
+```
+
+### Useful Commands
+
+```bash
+# View container logs
+./setup.sh logs
+
+# Stop containers
+./setup.sh stop
+
+# Restart containers
+./setup.sh restart
+
+# Remove all containers and volumes
+./setup.sh clean
+
+# View help message
+./setup.sh help
+```
+
+## Manual Setup and Installation
+
+If you prefer not to use Docker, follow these steps for manual installation: 

@@ -1,0 +1,54 @@
+# Git files
+.git
+.github
+.gitignore
+
+# Docker files
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Environment and configuration
+.env
+.env.*
+*.env
+
+# Data files
+*.csv
+*.json
+*.db
+*.sqlite
+*.parquet
+
+# Log files
+logs/
+*.log
+
+# Cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store 
