@@ -11,7 +11,9 @@ import argparse
 import ast
 import logging
 import os
-from typing import List
+from typing import List, Dict, Any
+import random
+import numpy as np
 
 import psycopg2
 from dotenv import load_dotenv
@@ -26,270 +28,248 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global flag for mock mode
+# Global mock mode flag
 MOCK_MODE = False
 
 def enable_mock_mode():
-    """Enable mock mode for testing without API calls"""
+    """Enable mock mode to run without real API calls"""
     global MOCK_MODE
     MOCK_MODE = True
-    logger.info("Mock mode enabled - no real API calls will be made")
+    logger.info("Mock mode enabled")
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Database connection details
-db_host = os.getenv('DB_HOST')
-db_port = int(os.getenv('DB_PORT', '5432'))  # Default to 5432 if not set
-db_name = os.getenv('DB_NAME')
-db_user = os.getenv('DB_USER')
-db_password = os.getenv('DB_PASSWORD')
-
-# OpenAI API key
-openai_api_key = os.getenv('OPENAI_API_KEY')
-
-# Configure connection string for pgvector
-CONNECTION_STRING = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-
-def get_db_connection():
-    """Create database connection with error handling"""
-    if MOCK_MODE:
-        logger.info("Using mock database connection for migration")
-        # Create a mock connection object that mimics psycopg2 connection
-        class MockCursor:
-            def execute(self, query, params=None):
-                logger.info(f"Mock executing query: {query}")
-                return self
-                
-            def fetchall(self):
-                logger.info("Mock fetching results")
-                # Mock Reddit embeddings
-                return [
-                    ["mock1", "Ethereum Discussion", "Ethereum is a great blockchain platform with smart contracts.", "[0.1]" * 1536, 100, 50, "2023-01-01"],
-                    ["mock2", "Bitcoin vs Ethereum", "Comparing the two biggest cryptocurrencies.", "[0.2]" * 1536, 200, 75, "2023-01-02"],
-                    ["mock3", "Solana's Recent Growth", "Solana has seen massive adoption recently.", "[0.3]" * 1536, 150, 30, "2023-01-03"]
-                ]
-                
-            def fetchone(self):
-                logger.info("Mock fetching one result")
-                return [True]  # Pretend the operation succeeded
-                
-            def close(self):
-                pass
-                
-        class MockConnection:
-            def cursor(self):
-                return MockCursor()
-                
-            def close(self):
-                pass
-                
-        return MockConnection()
+class MockCursor:
+    """Mock database cursor for testing"""
+    def __init__(self):
+        self.mock_data = [
+            {
+                'post_id': 'post1',
+                'title': 'Bitcoin price prediction',
+                'text': 'I think Bitcoin will reach $100k by the end of the year.',
+                'score': 42,
+                'num_comments': 23,
+                'created_utc': '2023-01-01',
+                'embedding': str([0.1] * 1536)
+            },
+            {
+                'post_id': 'post2',
+                'title': 'Ethereum vs Solana',
+                'text': 'Comparing the two smart contract platforms.',
+                'score': 30,
+                'num_comments': 15,
+                'created_utc': '2023-01-02',
+                'embedding': str([0.2] * 1536)
+            },
+            {
+                'post_id': 'post3',
+                'title': 'Regulation news',
+                'text': 'New cryptocurrency regulations are coming.',
+                'score': 25,
+                'num_comments': 10,
+                'created_utc': '2023-01-03',
+                'embedding': str([0.3] * 1536)
+            }
+        ]
+        self.fetched = 0
     
-    try:
-        return psycopg2.connect(
-            dbname=db_name, 
-            user=db_user, 
-            password=db_password, 
-            host=db_host, 
-            port=db_port
-        )
-    except Exception as e:
-        logger.error(f"Failed to connect to database: {e}")
-        raise
-
-def fetch_existing_embeddings() -> List[Document]:
-    """
-    Fetch existing Reddit embeddings from the database and 
-    convert them to LangChain Document format.
+    def execute(self, query, params=None):
+        logger.info(f"Mock executing query: \n{query}\n")
     
-    Returns:
-        List of LangChain Document objects containing Reddit posts and embeddings
-    """
-    logger.info("Fetching existing Reddit embeddings from database...")
+    def fetchall(self):
+        logger.info("Mock fetching all results")
+        return self.mock_data
     
-    db_connection = get_db_connection()
-    cursor = db_connection.cursor()
-    
-    try:
-        # Query to fetch all embeddings from the Reddit posts
-        cursor.execute("SELECT post_id, title, text, embedding, score, num_comments, created_utc FROM reddit_embeddings")
-        rows = cursor.fetchall()
-        
-        if not rows:
-            logger.warning("No existing embeddings found in the database.")
+    def fetchmany(self, size):
+        logger.info(f"Mock fetching {size} results")
+        if self.fetched >= len(self.mock_data):
             return []
         
-        # Convert to LangChain Document format
-        documents = []
-        
-        for row in rows:
-            post_id, title, text, embedding_str, score, num_comments, created_utc = row
-            
-            # Create a Document for each post
-            doc = Document(
-                page_content=text,
-                metadata={
-                    "post_id": post_id,
-                    "title": title,
-                    "score": score,
-                    "num_comments": num_comments,
-                    "created_utc": created_utc
-                }
-            )
-            
-            # If we need the raw embedding, we can add it (for direct import without re-embedding)
-            # For this example, we'll re-embed to ensure compatibility with LangChain
-            # doc.metadata["embedding"] = ast.literal_eval(embedding_str)
-            
-            documents.append(doc)
-        
-        logger.info(f"Successfully fetched {len(documents)} documents from the database.")
-        return documents
-        
-    except Exception as e:
-        logger.error(f"Error fetching embeddings: {e}")
-        return []
-    finally:
-        cursor.close()
-        db_connection.close()
+        batch = self.mock_data[self.fetched:min(self.fetched + size, len(self.mock_data))]
+        self.fetched += size
+        return batch
+    
+    def close(self):
+        pass
 
-def create_pgvector_table():
-    """
-    Create or verify the pgvector table needed for LangChain.
-    This ensures the extension is installed and the collection table exists.
-    """
-    logger.info("Setting up pgvector for LangChain...")
+class MockConnection:
+    """Mock database connection for testing"""
+    def __init__(self):
+        pass
     
-    if MOCK_MODE:
-        logger.info("Mock mode: Simulating pgvector setup")
-        return True
+    def cursor(self):
+        return MockCursor()
     
-    db_connection = get_db_connection()
-    cursor = db_connection.cursor()
+    def commit(self):
+        pass
     
-    try:
-        # Check if pgvector extension is installed
-        cursor.execute("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')")
-        has_vector_extension = cursor.fetchone()[0]
-        
-        if not has_vector_extension:
-            logger.error("pgvector extension is not installed in the database.")
-            logger.info("Please run: CREATE EXTENSION IF NOT EXISTS vector;")
-            return False
-        
-        # The langchain_pg_embedding table will be created automatically by PGVector
-        # but we can verify it doesn't already exist to avoid conflicts
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'langchain_pg_embedding')")
-        has_table = cursor.fetchone()[0]
-        
-        if has_table:
-            logger.info("langchain_pg_embedding table already exists.")
-            
-            # Optional: Check if it has content already
-            cursor.execute("SELECT COUNT(*) FROM langchain_pg_embedding")
-            count = cursor.fetchone()[0]
-            if count > 0:
-                logger.warning(f"Table already contains {count} records.")
-                
-        logger.info("pgvector setup complete.")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error setting up pgvector: {e}")
-        return False
-    finally:
-        cursor.close()
-        db_connection.close()
+    def close(self):
+        pass
+
+class MockEmbeddings:
+    """Mock embeddings for testing"""
+    def embed_documents(self, texts):
+        return [[random.random() for _ in range(1536)] for _ in texts]
+    
+    def embed_query(self, text):
+        return [random.random() for _ in range(1536)]
 
 class MockVectorStore:
-    """Mock implementation of the vector store for testing"""
-    
+    """Mock vector store for LangChain"""
     def __init__(self):
         self.documents = []
-        logger.info("Initialized mock vector store")
     
     def add_documents(self, documents):
-        """Simulate adding documents to the vector store"""
         self.documents.extend(documents)
         logger.info(f"Added {len(documents)} documents to mock vector store")
-        return len(documents)
+        return self.documents
 
-def migrate_to_langchain(batch_size=100, mock=False):
-    """
-    Migrate existing Reddit embeddings to LangChain PGVector format.
+def migrate_to_langchain(batch_size: int = 10, mock: bool = False):
+    """Migrate existing Reddit embeddings to LangChain PGVector format.
     
     Args:
-        batch_size: Number of documents to process in each batch
-        mock: Whether to run in mock mode
+        batch_size: Number of documents to process at once
+        mock: Whether to run in mock mode without real API calls
     """
     if mock:
         enable_mock_mode()
-        
-    logger.info("Starting migration to LangChain PGVector...")
     
-    # Initialize OpenAI embeddings
-    if not MOCK_MODE:
-        embeddings = OpenAIEmbeddings(api_key=openai_api_key)
+    logger.info("Beginning migration to LangChain PGVector...")
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Set up database connection
+    if MOCK_MODE:
+        logger.info("Using mock database connection")
+        conn = MockConnection()
     else:
-        # Create a simple mock embeddings object
-        class MockEmbeddings:
-            def embed_documents(self, texts):
-                return [[0.1] * 1536 for _ in texts]
-            
-            def embed_query(self, text):
-                return [0.1] * 1536
-                
-        embeddings = MockEmbeddings()
-    
-    # Make sure pgvector is set up
-    if not create_pgvector_table():
-        logger.error("Failed to set up pgvector. Migration aborted.")
-        return
-    
-    # Fetch documents from the existing database
-    documents = fetch_existing_embeddings()
-    
-    if not documents:
-        logger.warning("No documents to migrate. Exiting.")
-        return
-    
-    # Set up LangChain's PGVector or mock version
-    try:
-        if MOCK_MODE:
-            vectorstore = MockVectorStore()
-        else:
-            vectorstore = PGVector(
-                collection_name="reddit_vectors",
-                connection_string=CONNECTION_STRING,
-                embedding_function=embeddings,
-                use_jsonb=True
+        try:
+            conn = psycopg2.connect(
+                dbname=os.getenv('DB_NAME', 'crypto_data'),
+                user=os.getenv('DB_USER', 'postgres'),
+                password=os.getenv('DB_PASSWORD', 'postgres'),
+                host=os.getenv('DB_HOST', 'localhost'),
+                port=os.getenv('DB_PORT', '5432')
             )
+        except Exception as e:
+            logger.error(f"Error connecting to database: {e}")
+            return
+    
+    cursor = conn.cursor()
+    
+    try:
+        # Fetch existing Reddit embeddings
+        cursor.execute("""
+            SELECT post_id, title, text, embedding, score, num_comments, created_utc
+            FROM reddit_embeddings
+        """)
         
-        # Process in batches to avoid memory issues or rate limiting
-        total_documents = len(documents)
-        for i in range(0, total_documents, batch_size):
-            batch = documents[i:i+batch_size]
-            logger.info(f"Processing batch {i//batch_size + 1}/{(total_documents-1)//batch_size + 1} ({len(batch)} documents)")
+        # Set up LangChain components
+        CONNECTION_STRING = f"postgresql+psycopg2://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'crypto_data')}"
+        COLLECTION_NAME = "reddit_posts"
+        
+        # Set up embeddings
+        if MOCK_MODE:
+            embeddings = MockEmbeddings()
+            logger.info("Using mock OpenAI embeddings")
             
-            # Add documents to the vector store
-            vectorstore.add_documents(batch)
+            # Use mock vector store
+            vector_store = MockVectorStore()
+        else:
+            embeddings = OpenAIEmbeddings()
             
-            logger.info(f"Batch {i//batch_size + 1} completed.")
+            # Use PGVector for real migration
+            try:
+                logger.info("Setting up pgvector...")
+                vector_store = PGVector(
+                    collection_name=COLLECTION_NAME,
+                    connection_string=CONNECTION_STRING,
+                    embedding_function=embeddings
+                )
+            except Exception as e:
+                logger.error(f"Error setting up pgvector: {e}")
+                return
         
-        logger.info(f"Migration complete! {total_documents} documents migrated to LangChain PGVector.")
-        
+        # Process in batches
+        if MOCK_MODE:
+            # Use mock cursor for batch fetching
+            all_docs = 0
+            batch_num = 0
+            
+            while True:
+                batch = cursor.fetchmany(batch_size)
+                if not batch:
+                    break
+                
+                batch_num += 1
+                logger.info(f"Processing batch {batch_num} with {len(batch)} documents")
+                
+                # Convert to LangChain documents
+                documents = []
+                for row in batch:
+                    post_id, title, text, embedding_str, score, num_comments, created_utc = row
+                    
+                    # Create a document with metadata
+                    doc = Document(
+                        page_content=f"{title}\n\n{text}",
+                        metadata={
+                            "post_id": post_id,
+                            "score": score,
+                            "num_comments": num_comments,
+                            "created_utc": created_utc,
+                            "source": "reddit"
+                        }
+                    )
+                    documents.append(doc)
+                
+                # Add to vector store
+                vector_store.add_documents(documents)
+                all_docs += len(documents)
+            
+            logger.info(f"Migration complete. {all_docs} documents migrated to LangChain PGVector.")
+        else:
+            # Fetch all at once for real database connection
+            all_rows = cursor.fetchall()
+            logger.info(f"Fetched {len(all_rows)} documents from reddit_embeddings table")
+            
+            # Process in batches
+            for i in range(0, len(all_rows), batch_size):
+                batch = all_rows[i:i+batch_size]
+                logger.info(f"Processing batch {i//batch_size + 1} with {len(batch)} documents")
+                
+                # Convert to LangChain documents
+                documents = []
+                for row in batch:
+                    post_id, title, text, embedding_str, score, num_comments, created_utc = row
+                    
+                    # Create a document with metadata
+                    doc = Document(
+                        page_content=f"{title}\n\n{text}",
+                        metadata={
+                            "post_id": post_id,
+                            "score": score,
+                            "num_comments": num_comments,
+                            "created_utc": created_utc,
+                            "source": "reddit"
+                        }
+                    )
+                    documents.append(doc)
+                
+                # Add to vector store
+                vector_store.add_documents(documents)
+            
+            logger.info(f"Migration complete. {len(all_rows)} documents migrated to LangChain PGVector.")
+    
     except Exception as e:
         logger.error(f"Error during migration: {e}")
-
-def main():
-    """Main function to run the migration script"""
-    parser = argparse.ArgumentParser(description='Migrate Reddit embeddings to LangChain PGVector')
-    parser.add_argument('--batch-size', type=int, default=100, help='Batch size for processing documents')
-    parser.add_argument('--mock', action='store_true', help='Run in mock mode without real API calls')
-    args = parser.parse_args()
     
-    migrate_to_langchain(batch_size=args.batch_size, mock=args.mock)
+    finally:
+        cursor.close()
+        conn.close()
 
 if __name__ == "__main__":
-    main() 
+    parser = argparse.ArgumentParser(description="Migrate Reddit embeddings to LangChain PGVector format")
+    parser.add_argument("--batch-size", type=int, default=10, help="Number of documents to process at once")
+    parser.add_argument("--mock", action="store_true", help="Run in mock mode without real API calls")
+    args = parser.parse_args()
+    
+    migrate_to_langchain(batch_size=args.batch_size, mock=args.mock) 

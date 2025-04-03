@@ -22,8 +22,10 @@ tabulate==0.9.0
 networkx>=3.0.0
 pyvis>=0.3.2
 
-# MCP Framework
+# LangChain Framework
 langchain>=0.1.0
 langchain-openai>=0.0.2
 langchain-community>=0.0.13
+langchain-text-splitters>=0.0.1
+langchain-postgres>=0.0.1
 tiktoken>=0.5.1

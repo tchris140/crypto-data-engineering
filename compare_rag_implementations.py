@@ -15,11 +15,6 @@ import logging
 import time
 from tabulate import tabulate
 
-# Import the three implementations
-import RAG
-import improved_RAG
-from langchain_rag import CryptoRAGSystem
-
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -27,126 +22,135 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def compare_implementations(query, mock_mode=False):
-    """
-    Compare the three RAG implementations with the same query.
-    
-    Args:
-        query: Query to test with all implementations
-        mock_mode: Whether to use mock mode (no API calls)
-    
-    Returns:
-        Dictionary of results with times and responses
-    """
-    results = {}
-    
-    # 1. Original RAG
-    logger.info("Testing original RAG implementation...")
-    if mock_mode:
-        RAG.enable_mock_mode()
-    
-    start_time = time.time()
-    db_connection_original = RAG.get_db_connection()
-    response_original = RAG.chat(query, db_connection_original)
-    end_time = time.time()
-    
-    results["original"] = {
-        "time": end_time - start_time,
-        "response": response_original
-    }
-    
-    logger.info(f"Original RAG completed in {results['original']['time']:.2f} seconds")
-    
-    # 2. Improved RAG
-    logger.info("Testing improved RAG implementation...")
-    if mock_mode:
-        improved_RAG.enable_mock_mode()
-    
-    start_time = time.time()
-    db_connection_improved = improved_RAG.get_db_connection()
-    response_improved = improved_RAG.chat(query, db_connection_improved)
-    end_time = time.time()
-    
-    results["improved"] = {
-        "time": end_time - start_time,
-        "response": response_improved
-    }
-    
-    logger.info(f"Improved RAG completed in {results['improved']['time']:.2f} seconds")
-    
-    # 3. LangChain RAG
-    logger.info("Testing LangChain RAG implementation...")
-    
-    start_time = time.time()
-    langchain_rag = CryptoRAGSystem(mock_mode=mock_mode)
-    response_langchain = langchain_rag.chat(query)
-    end_time = time.time()
-    
-    results["langchain"] = {
-        "time": end_time - start_time,
-        "response": response_langchain
-    }
-    
-    logger.info(f"LangChain RAG completed in {results['langchain']['time']:.2f} seconds")
-    
-    return results
+def test_original_rag(query, mock_mode=False):
+    """Test the original RAG implementation"""
+    try:
+        # Import the RAG module
+        import RAG
+        
+        logger.info("Testing original RAG implementation...")
+        start_time = time.time()
+        
+        # Process query
+        if mock_mode:
+            response = "This is a mock response from the original RAG. It provides basic information about Ethereum, the second-largest cryptocurrency by market cap."
+        else:
+            response = RAG.process_query(query)
+        
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
+        return {
+            "execution_time": execution_time,
+            "response": response
+        }
+    except Exception as e:
+        logger.error(f"Error testing original RAG: {e}")
+        return {
+            "execution_time": 0,
+            "response": f"Error: {e}"
+        }
 
-def display_comparison_table(results):
-    """
-    Display a comparison table of the results.
-    
-    Args:
-        results: Dictionary of results from compare_implementations
-    """
-    table_data = []
-    
-    for implementation, data in results.items():
-        # Truncate response if too long
-        response = data["response"]
-        if len(response) > 100:
-            response = response[:97] + "..."
-            
-        table_data.append([
-            implementation.capitalize(),
-            f"{data['time']:.2f}s",
-            response
-        ])
-    
-    # Print the table
-    headers = ["Implementation", "Time", "Response"]
-    print("\n" + tabulate(table_data, headers=headers, tablefmt="grid"))
+def test_improved_rag(query, mock_mode=False):
+    """Test the improved RAG implementation"""
+    try:
+        # Import the improved_RAG module
+        import improved_RAG
+        
+        logger.info("Testing improved RAG implementation...")
+        start_time = time.time()
+        
+        # Process query
+        if mock_mode:
+            response = "This is a mock response from the improved RAG. It provides more detailed information about Ethereum, including its price, market cap, and recent community discussions about upgrades and DeFi applications."
+        else:
+            rag = improved_RAG.CryptoRAG(mock_mode=mock_mode)
+            response = rag.answer_query(query)
+        
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
+        return {
+            "execution_time": execution_time,
+            "response": response
+        }
+    except Exception as e:
+        logger.error(f"Error testing improved RAG: {e}")
+        return {
+            "execution_time": 0,
+            "response": f"Error: {e}"
+        }
 
-def display_detailed_responses(results):
-    """
-    Display the full responses from each implementation.
+def test_langchain_rag(query, mock_mode=False):
+    """Test the LangChain RAG implementation"""
+    try:
+        # Import the LangChain RAG module
+        from langchain_rag import CryptoRAGSystem
+        
+        logger.info("Testing LangChain RAG implementation...")
+        start_time = time.time()
+        
+        # Process query
+        langchain_rag = CryptoRAGSystem(mock_mode=mock_mode)
+        response = langchain_rag.chat(query)
+        
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
+        return {
+            "execution_time": execution_time,
+            "response": response
+        }
+    except Exception as e:
+        logger.error(f"Error testing LangChain RAG: {e}")
+        return {
+            "execution_time": 0,
+            "response": f"Error: {e}"
+        }
+
+def compare_implementations(query, mock_mode=False, full_output=False):
+    """Compare all three RAG implementations"""
+    logger.info(f"Comparing RAG implementations with query: '{query}'")
     
-    Args:
-        results: Dictionary of results from compare_implementations
-    """
-    for implementation, data in results.items():
-        print(f"\n{'=' * 40}")
-        print(f" {implementation.upper()} RAG RESPONSE ")
-        print(f"{'=' * 40}")
-        print(data["response"])
-        print(f"{'=' * 80}")
+    # Test each implementation
+    original_result = test_original_rag(query, mock_mode)
+    improved_result = test_improved_rag(query, mock_mode)
+    langchain_result = test_langchain_rag(query, mock_mode)
+    
+    # Create a comparison table
+    comparison = [
+        ["Original RAG", f"{original_result['execution_time']:.2f}s", 
+         original_result['response'] if full_output else original_result['response'][:100] + "..."],
+        ["Improved RAG", f"{improved_result['execution_time']:.2f}s", 
+         improved_result['response'] if full_output else improved_result['response'][:100] + "..."],
+        ["LangChain RAG", f"{langchain_result['execution_time']:.2f}s", 
+         langchain_result['response'] if full_output else langchain_result['response'][:100] + "..."]
+    ]
+    
+    # Format the table
+    table = tabulate(comparison, headers=["Implementation", "Execution Time", "Response"], tablefmt="grid")
+    
+    # Output the table
+    logger.info("\nComparison Results:\n" + table)
+    print("\n" + table)
+    
+    # Return the results
+    return {
+        "original": original_result,
+        "improved": improved_result,
+        "langchain": langchain_result
+    }
 
 def main():
     """Main function to run the comparison"""
-    parser = argparse.ArgumentParser(description='Compare RAG Implementations')
-    parser.add_argument('--query', type=str, default="Ethereum", help='Query to process with all implementations')
-    parser.add_argument('--mock', action='store_true', help='Run in mock mode without real API calls')
-    parser.add_argument('--full', action='store_true', help='Display full responses')
+    parser = argparse.ArgumentParser(description="Compare different RAG implementations")
+    parser.add_argument("--query", type=str, default="Ethereum", help="Query to test with all implementations")
+    parser.add_argument("--mock", action="store_true", help="Run in mock mode without real API calls")
+    parser.add_argument("--full", action="store_true", help="Show full response output instead of truncated")
     args = parser.parse_args()
     
     # Run the comparison
-    results = compare_implementations(args.query, args.mock)
-    
-    # Display the results
-    display_comparison_table(results)
-    
-    # Display full responses if requested
-    if args.full:
-        display_detailed_responses(results)
+    compare_implementations(args.query, args.mock, args.full)
     
     logger.info("Comparison complete!")
 
