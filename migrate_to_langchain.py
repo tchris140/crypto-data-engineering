@@ -15,9 +15,12 @@ import sys
 from typing import List, Dict, Any
 import random
 import numpy as np
+from pathlib import Path
 
-import psycopg2
-from dotenv import load_dotenv
+# Add the project root to Python path to ensure imports work
+project_root = Path(__file__).resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # Set up logging
 logging.basicConfig(
@@ -33,9 +36,37 @@ def enable_mock_mode():
     """Enable mock mode to run without real API calls"""
     global MOCK_MODE
     MOCK_MODE = True
-    logger.info("Mock mode enabled")
+    logger.info("Mock mode enabled - no real API calls will be made")
 
-# Add more graceful imports for CI environment
+# Check for CI environment
+if 'CI' in os.environ:
+    enable_mock_mode()
+    logger.info("CI environment detected - forcing mock mode")
+
+# Gracefully handle imports
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError as e:
+    logger.warning(f"Error importing dotenv: {e}")
+    logger.info("Environment variables may not be loaded")
+
+try:
+    import psycopg2
+except ImportError as e:
+    logger.warning(f"Error importing psycopg2: {e}")
+    logger.info("Falling back to mock database connections")
+    MOCK_MODE = True
+
+try:
+    import pgvector
+    logger.info("Successfully imported pgvector module")
+except ImportError as e:
+    logger.warning(f"Error importing pgvector: {e}")
+    logger.info("Falling back to mock vector operations")
+    MOCK_MODE = True
+
+# Add more graceful imports for LangChain
 try:
     from langchain_community.embeddings import OpenAIEmbeddings
     from langchain.schema import Document

@@ -44,7 +44,7 @@ except ImportError as e:
     HAVE_LANGCHAIN = False
 
 # Import data lineage tracking
-from data_lineage import DataLineage
+from data_lineage import DataLineage, LineageContext
 
 # Global flag for mock mode
 MOCK_MODE = False

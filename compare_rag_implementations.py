@@ -13,9 +13,22 @@ Usage:
 import argparse
 import logging
 import time
-from tabulate import tabulate
 import os
 import sys
+from pathlib import Path
+
+# Add the project root to Python path to ensure imports work
+project_root = Path(__file__).resolve().parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+try:
+    from tabulate import tabulate
+except ImportError as e:
+    logging.error(f"Error importing tabulate: {e}")
+    print("Installing tabulate...")
+    os.system("pip install tabulate")
+    from tabulate import tabulate
 
 # Set up logging
 logging.basicConfig(
@@ -23,6 +36,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Global mock mode flag - enables CI compatibility
+MOCK_MODE = 'CI' in os.environ or '--mock' in sys.argv
 
 def test_original_rag(query, mock_mode=True):
     """Test the original RAG implementation"""

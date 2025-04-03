@@ -72,16 +72,16 @@ def get_cmc_coin_mapping():
     headers = {"X-CMC_PRO_API_KEY": CMC_API_KEY}
     map_response = requests.get(CMC_MAP_URL, headers=headers)
 
-    if map_response.status_code == 200:
-        cmc_data = map_response.json()["data"]
-        
-        # Create a dictionary mapping names & slugs to symbols
-        cmc_map = {coin["name"]: coin["symbol"] for coin in cmc_data}
-        cmc_map.update({coin["slug"]: coin["symbol"] for coin in cmc_data})
+if map_response.status_code == 200:
+    cmc_data = map_response.json()["data"]
+    
+    # Create a dictionary mapping names & slugs to symbols
+    cmc_map = {coin["name"]: coin["symbol"] for coin in cmc_data}
+    cmc_map.update({coin["slug"]: coin["symbol"] for coin in cmc_data})
 
         logger.info(f"Successfully fetched {len(cmc_map)} coin mappings")
         return cmc_map
-    else:
+else:
         logger.error(f"Failed to fetch CoinMarketCap coin mapping. Status code: {map_response.status_code}")
         return {}
 
@@ -91,14 +91,14 @@ def get_top_chains_from_defi_llama(limit=50):
     
     response = requests.get(DEFI_LLAMA_URL)
     
-    if response.status_code == 200:
-        data = response.json()
+if response.status_code == 200:
+    data = response.json()
 
-        # Sort by TVL and filter out excluded names
+    # Sort by TVL and filter out excluded names
         top_chains = sorted(
             [chain for chain in data if chain.get('name') not in EXCLUDED_NAMES], 
-            key=lambda x: x.get('tvl', 0), 
-            reverse=True
+        key=lambda x: x.get('tvl', 0), 
+        reverse=True
         )[:limit]  # Ensure we get the specified limit of valid entries
         
         logger.info(f"Successfully fetched {len(top_chains)} chains")
@@ -114,12 +114,12 @@ def match_coin_symbol(name, cmc_map):
         logger.debug(f"Found manual mapping for {name}: {MANUAL_MAPPINGS[name]}")
         return MANUAL_MAPPINGS[name]
     
-    # Try exact match
-    symbol = cmc_map.get(name)
-    
-    # If no exact match, try fuzzy matching
-    if not symbol:
-        possible_matches = difflib.get_close_matches(name, cmc_map.keys(), n=1, cutoff=0.7)
+            # Try exact match
+            symbol = cmc_map.get(name)
+            
+            # If no exact match, try fuzzy matching
+            if not symbol:
+                possible_matches = difflib.get_close_matches(name, cmc_map.keys(), n=1, cutoff=0.7)
         if possible_matches:
             symbol = cmc_map.get(possible_matches[0])
             if symbol:
@@ -138,13 +138,13 @@ def fetch_market_data_batch(coin_batch, retries=3, delay=1):
     for attempt in range(retries):
         try:
             cmc_response = requests.get(CMC_QUOTE_URL, headers=headers, params=params)
-            
-            if cmc_response.status_code == 200:
+
+        if cmc_response.status_code == 200:
                 return cmc_response.json().get("data", {})
             elif cmc_response.status_code == 429:  # Rate limit error
                 logger.warning(f"Rate limit hit. Retrying after delay. Attempt {attempt+1}/{retries}")
                 time.sleep(delay * (2 ** attempt))  # Exponential backoff
-            else:
+                else:
                 logger.error(f"Failed to fetch market data. Status Code: {cmc_response.status_code}")
                 return {}
                 
@@ -152,7 +152,7 @@ def fetch_market_data_batch(coin_batch, retries=3, delay=1):
             logger.error(f"Error fetching market data: {e}")
             if attempt < retries - 1:
                 time.sleep(delay * (2 ** attempt))
-            else:
+        else:
                 return {}
     
     logger.error(f"Failed to fetch market data for batch after {retries} attempts")
@@ -163,28 +163,28 @@ def process_coin_data(coin_batch, market_data):
     processed_data = []
     
     for coin in coin_batch:
-        symbol = coin["symbol"]
-        name = coin["name"]
-        tvl = coin["tvl"]
-        
+            symbol = coin["symbol"]
+            name = coin["name"]
+            tvl = coin["tvl"]
+
         if symbol in market_data:
             coin_data = market_data[symbol]["quote"]["USD"]
-            price = coin_data.get("price", "N/A")
-            market_cap = coin_data.get("market_cap", "N/A")
-            volume_24h = coin_data.get("volume_24h", "N/A")
+                price = coin_data.get("price", "N/A")
+                market_cap = coin_data.get("market_cap", "N/A")
+                volume_24h = coin_data.get("volume_24h", "N/A")
             circulating_supply = market_data[symbol].get("circulating_supply", "N/A")
-        else:
+            else:
             logger.warning(f"No market data found for {name} ({symbol})")
-            price, market_cap, volume_24h, circulating_supply = 'N/A', 'N/A', 'N/A', 'N/A'
-        
+                price, market_cap, volume_24h, circulating_supply = 'N/A', 'N/A', 'N/A', 'N/A'
+
         # Append data for DataFrame
         processed_data.append({
-            "Name": name,
-            "Symbol": symbol,
-            "TVL": tvl,
-            "Price (USD)": price,
-            "Market Cap (USD)": market_cap,
-            "24h Volume (USD)": volume_24h,
+                "Name": name,
+                "Symbol": symbol,
+                "TVL": tvl,
+                "Price (USD)": price,
+                "Market Cap (USD)": market_cap,
+                "24h Volume (USD)": volume_24h,
             "Circulating Supply": circulating_supply,
             "Last Updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
