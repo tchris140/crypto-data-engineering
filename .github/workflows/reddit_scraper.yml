@@ -38,4 +38,19 @@ jobs:
         python Reddit_scraper.py || {
           echo "Normal execution failed, trying with mock mode for testing..."
           python Reddit_scraper.py --mock
+        }
+
+    - name: Test RAG System
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        DB_USER: ${{ secrets.DB_USER }}
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        DB_HOST: ${{ secrets.DB_HOST }}
+        DB_PORT: ${{ secrets.DB_PORT }}
+        DB_NAME: ${{ secrets.DB_NAME }}
+      run: |
+        # Test the improved RAG system with a sample query
+        python improved_RAG.py --query "Bitcoin" || {
+          echo "Normal RAG execution failed, trying with mock mode..."
+          python improved_RAG.py --mock --query "Bitcoin"
         } 

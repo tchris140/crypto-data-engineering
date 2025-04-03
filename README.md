@@ -27,6 +27,16 @@ The Reddit pipeline collects and analyzes cryptocurrency discussions:
 - **Reddit_scraper.py**: Fetches posts from r/cryptocurrency and generates embeddings
 - Supports both normal and mock mode for testing
 
+### 3. Conversational RAG System
+
+The Retrieval-Augmented Generation (RAG) system provides AI-powered cryptocurrency insights:
+
+- **RAG.py**: Original implementation that retrieves and presents data
+- **improved_RAG.py**: Enhanced version that generates conversational responses
+- Uses OpenAI to create natural language answers based on retrieved data
+- Combines structured market data with relevant Reddit discussions
+- Supports mock mode for testing without API calls
+
 ## Setup and Installation
 
 1. Clone this repository
@@ -74,6 +84,16 @@ python Reddit_scraper.py
 
 # Run in mock mode (for testing)
 python Reddit_scraper.py --mock
+```
+
+### Conversational Crypto Assistant
+
+```bash
+# Run the improved RAG system with a query
+python improved_RAG.py --query "Bitcoin"
+
+# Test in mock mode
+python improved_RAG.py --mock --query "Ethereum"
 ```
 
 ## Automated Workflows
