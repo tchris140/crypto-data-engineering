@@ -461,3 +461,44 @@ Test the application without using real API calls:
 ## Manual Setup and Installation
 
 If you prefer not to use Docker, follow these steps for manual installation: 
+
+## Continuous Integration & Deployment
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+### CI/CD Workflows
+
+- **Docker CI**: Builds and tests the Docker containers, ensuring the application runs correctly in a containerized environment.
+- **Code Quality**: Runs linting, formatting checks, and security scans to maintain code quality.
+- **Security Scanning**: Performs security checks on dependencies and code to identify vulnerabilities.
+- **Container Registry**: Builds and pushes Docker images to GitHub Container Registry for versioned deployments.
+
+### Running CI Locally
+
+You can test the CI pipeline locally using the following commands:
+
+```bash
+# Install quality check tools
+pip install flake8 black isort bandit safety pylint
+
+# Run linting and formatting checks
+flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+black --check .
+isort --check --profile black .
+
+# Run security checks
+bandit -r . -x ./tests,./venv
+safety check -r requirements.txt
+```
+
+### Using GitHub Container Registry Images
+
+Pre-built Docker images are available in the GitHub Container Registry:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/yourusername/crypto-data-engineering/crypto-app:main
+
+# Run using the pre-built image
+docker run --rm ghcr.io/yourusername/crypto-data-engineering/crypto-app defi --mock
+```
