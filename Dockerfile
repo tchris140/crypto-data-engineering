@@ -21,6 +21,12 @@ RUN git clone https://github.com/pgvector/pgvector.git \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install data lineage visualization dependencies
+RUN pip install --no-cache-dir networkx pyvis
+
+# Create visualization directory
+RUN mkdir -p /app/visualizations
+
 # Copy project files
 COPY . .
 
@@ -42,15 +48,22 @@ elif [ "$1" = "test" ]; then\n\
     python test_pgvector.py\n\
 elif [ "$1" = "check" ]; then\n\
     python check.py\n\
+elif [ "$1" = "lineage" ]; then\n\
+    echo "Generating data lineage for all pipelines..."\n\
+    python DefiLlama_scraper.py --mock\n\
+    python Reddit_scraper.py --mock\n\
+    python improved_RAG.py --mock --query "Bitcoin"\n\
+    echo "Lineage visualizations generated in /app/visualizations/"\n\
 else\n\
     echo "Usage: docker run [options] <image> [command] [args]"\n\
     echo ""\n\
     echo "Commands:"\n\
-    echo "  defi    Run DeFi Llama scraper"\n\
-    echo "  reddit  Run Reddit scraper"\n\
-    echo "  rag     Run improved RAG system"\n\
-    echo "  test    Run pgvector tests"\n\
-    echo "  check   Run database checks"\n\
+    echo "  defi      Run DeFi Llama scraper"\n\
+    echo "  reddit    Run Reddit scraper"\n\
+    echo "  rag       Run improved RAG system"\n\
+    echo "  test      Run pgvector tests"\n\
+    echo "  check     Run database checks"\n\
+    echo "  lineage   Generate data lineage visualizations"\n\
 fi' > /app/entrypoint.sh
 
 RUN chmod +x /app/entrypoint.sh

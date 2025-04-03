@@ -16,6 +16,9 @@ import prawcore
 import requests
 import numpy as np
 
+# Import data lineage
+from data_lineage import get_lineage_tracker, LineageContext
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
@@ -149,41 +152,95 @@ def get_db_connection():
         logger.error(f"Failed to create database connection: {e}")
         raise
 
-def get_embedding(text, model="text-embedding-ada-002"):
-    """Generate embedding for a given text using OpenAI API."""
+def get_embedding(text):
+    """Get OpenAI embedding for text with error handling."""
+    # Create a data lineage node for the embedding process
+    lineage = get_lineage_tracker()
+    source_id = lineage.add_node(
+        node_type="dataset",
+        name="Text Content",
+        description="Reddit post text content to be embedded",
+        metadata={"text_length": len(text) if text else 0}
+    )
+    
     if MOCK_MODE:
-        logger.info(f"Generating mock embedding for: {text[:30]}...")
-        # Return a simple mock embedding (dimensionality 1536 to match ada-002)
-        return [0.1] * 1536
+        logger.info("Using mock embeddings")
+        # Generate a random vector of length 1536 (same as OpenAI embeddings)
+        return np.random.rand(1536).tolist()
         
     try:
-        response = openai.Embedding.create(input=[text], model=model)
-        return response['data'][0]['embedding']
+        with LineageContext(
+            source_nodes=source_id,
+            operation="transform",
+            target_name="OpenAI Embedding",
+            target_description="Text embedded as vector using OpenAI API",
+            target_type="dataset",
+            metadata={"model": "text-embedding-ada-002", "dimensions": 1536}
+        ) as embedding_id:
+            response = openai.Embedding.create(
+                input=text,
+                model="text-embedding-ada-002"
+            )
+            embedding = response['data'][0]['embedding']
+            
+            # Add metadata to the lineage
+            lineage.get_node(embedding_id).metadata.update({
+                "vector_length": len(embedding),
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            return embedding
     except Exception as e:
-        logger.error(f"Failed to generate embedding: {e}")
+        logger.error(f"Error getting embedding: {e}")
         raise
 
 def fetch_recent_posts(subreddit, hours=24):
     """Fetch recent posts from subreddit within specified time window."""
+    # Create a data lineage node for the Reddit API source
+    lineage = get_lineage_tracker()
+    source_id = lineage.add_node(
+        node_type="source",
+        name="Reddit API",
+        description=f"API for fetching posts from r/{subreddit.display_name}",
+        metadata={"subreddit": subreddit.display_name, "time_window": f"{hours} hours"}
+    )
+    
     posts = []
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     
     try:
-        for post in subreddit.new(limit=100):  # Increased limit to ensure we get enough recent posts
-            created_at = datetime.fromtimestamp(float(post.created_utc), tz=timezone.utc)
+        with LineageContext(
+            source_nodes=source_id,
+            operation="extract",
+            target_name="Reddit Posts",
+            target_description=f"Raw posts from r/{subreddit.display_name}",
+            target_type="dataset",
+            metadata={"timestamp": datetime.now().isoformat()}
+        ) as posts_id:
+            post_count = 0
             
-            if created_at < cutoff_time:
-                continue
+            for post in subreddit.new(limit=100):  # Increased limit to ensure we get enough recent posts
+                created_at = datetime.fromtimestamp(float(post.created_utc), tz=timezone.utc)
                 
-            if post.selftext:
-                logger.info(f"Processing post: {post.id}")
-                embedding = get_embedding(post.selftext)
-                posts.append([
-                    post.id, post.title, post.selftext, 
-                    post.score, post.num_comments, created_at, embedding
-                ])
-                
-        return posts
+                if created_at < cutoff_time:
+                    continue
+                    
+                if post.selftext:
+                    logger.info(f"Processing post: {post.id}")
+                    embedding = get_embedding(post.selftext)
+                    posts.append([
+                        post.id, post.title, post.selftext, 
+                        post.score, post.num_comments, created_at, embedding
+                    ])
+                    post_count += 1
+            
+            # Add metadata to the lineage
+            lineage.get_node(posts_id).metadata.update({
+                "post_count": post_count,
+                "oldest_post": cutoff_time.isoformat()
+            })
+            
+            return posts
     except Exception as e:
         logger.error(f"Failed to fetch posts: {e}")
         raise
@@ -193,54 +250,77 @@ def insert_posts_to_db(posts, engine):
     if not posts:
         logger.info("No new posts to insert")
         return
-        
+    
+    # Create data lineage nodes for the posts dataset
+    lineage = get_lineage_tracker()
+    posts_dataset_id = lineage.add_node(
+        node_type="dataset",
+        name="Reddit Posts with Embeddings",
+        description="Reddit posts ready for database insertion",
+        metadata={"post_count": len(posts)}
+    )
+    
     df = pd.DataFrame(posts, columns=[
         "post_id", "title", "text", "score", 
         "num_comments", "created_utc", "embedding"
     ])
     
     try:
-        conn = engine.raw_connection()
-        cursor = conn.cursor()
-        
-        # Check if we need to add the vector column
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'reddit_embeddings' AND column_name = 'embedding_vector')")
-        has_vector_column = cursor.fetchone()[0]
-        
-        if not has_vector_column:
-            logger.info("Adding embedding_vector column to reddit_embeddings table")
-            cursor.execute("ALTER TABLE reddit_embeddings ADD COLUMN embedding_vector vector(1536)")
+        with LineageContext(
+            source_nodes=posts_dataset_id,
+            operation="load",
+            target_name="PostgreSQL Database",
+            target_description="Reddit posts stored in PostgreSQL with pgvector",
+            target_type="destination",
+            metadata={"timestamp": datetime.now().isoformat(), "table": "reddit_embeddings"}
+        ) as db_id:
+            conn = engine.raw_connection()
+            cursor = conn.cursor()
+            
+            # Check if we need to add the vector column
+            cursor.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'reddit_embeddings' AND column_name = 'embedding_vector')")
+            has_vector_column = cursor.fetchone()[0]
+            
+            if not has_vector_column:
+                logger.info("Adding embedding_vector column to reddit_embeddings table")
+                cursor.execute("ALTER TABLE reddit_embeddings ADD COLUMN embedding_vector vector(1536)")
+                conn.commit()
+            
+            # PostgreSQL with ON CONFLICT
+            insert_query = """
+                INSERT INTO reddit_embeddings 
+                    (post_id, title, text, score, num_comments, created_utc, embedding, embedding_vector)
+                VALUES %s
+                ON CONFLICT (post_id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    text = EXCLUDED.text,
+                    score = EXCLUDED.score,
+                    num_comments = EXCLUDED.num_comments,
+                    created_utc = EXCLUDED.created_utc,
+                    embedding = EXCLUDED.embedding,
+                    embedding_vector = EXCLUDED.embedding_vector;
+            """
+            
+            records = [
+                (row.post_id, row.title, row.text, row.score, 
+                 row.num_comments, row.created_utc, 
+                 f"[{','.join(map(str, row.embedding))}]",
+                 np.array(row.embedding).tolist())
+                for row in df.itertuples(index=False)
+            ]
+            
+            execute_values(cursor, insert_query, records, template="""
+                (%s, %s, %s, %s, %s, %s, %s, %s::vector)
+            """)
+            
             conn.commit()
-        
-        # PostgreSQL with ON CONFLICT
-        insert_query = """
-            INSERT INTO reddit_embeddings 
-                (post_id, title, text, score, num_comments, created_utc, embedding, embedding_vector)
-            VALUES %s
-            ON CONFLICT (post_id) DO UPDATE SET
-                title = EXCLUDED.title,
-                text = EXCLUDED.text,
-                score = EXCLUDED.score,
-                num_comments = EXCLUDED.num_comments,
-                created_utc = EXCLUDED.created_utc,
-                embedding = EXCLUDED.embedding,
-                embedding_vector = EXCLUDED.embedding_vector;
-        """
-        
-        records = [
-            (row.post_id, row.title, row.text, row.score, 
-             row.num_comments, row.created_utc, 
-             f"[{','.join(map(str, row.embedding))}]",
-             np.array(row.embedding).tolist())
-            for row in df.itertuples(index=False)
-        ]
-        
-        execute_values(cursor, insert_query, records, template="""
-            (%s, %s, %s, %s, %s, %s, %s, %s::vector)
-        """)
-        
-        conn.commit()
-        logger.info(f"Successfully inserted {len(posts)} posts into database")
+            
+            # Add metadata to the lineage
+            lineage.get_node(db_id).metadata.update({
+                "records_inserted": len(posts)
+            })
+            
+            logger.info(f"Successfully inserted {len(posts)} posts into database")
         
     except Exception as e:
         logger.error(f"Failed to insert posts into database: {e}")
@@ -256,6 +336,8 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Reddit Scraper')
     parser.add_argument('--mock', action='store_true', help='Run in mock mode without real API calls')
+    parser.add_argument('--subreddit', type=str, default='cryptocurrency', help='Subreddit to scrape')
+    parser.add_argument('--hours', type=int, default=24, help='Time window in hours')
     args = parser.parse_args()
     
     if args.mock:
@@ -264,27 +346,50 @@ def main():
     # Load environment variables
     load_dotenv()
     
-    # Initialize clients
-    reddit = init_reddit_client()
-    init_openai()
-    engine = get_db_connection()
+    # Create a visualization directory
+    os.makedirs('visualizations', exist_ok=True)
     
-    # Fetch posts from the cryptocurrency subreddit
-    subreddit = reddit.subreddit("cryptocurrency")
-    logger.info(f"Fetching posts from r/{subreddit.display_name}")
-    
-    posts = fetch_recent_posts(subreddit)
-    
-    # Insert posts to database
-    insert_posts_to_db(posts, engine)
-    
-    logger.info(f"Successfully inserted {len(posts)} posts into database")
-    logger.info("Script completed successfully")
+    try:
+        # Initialize clients
+        reddit = init_reddit_client()
+        init_openai()
+        engine = get_db_connection()
+        
+        # Create a data lineage pipeline node
+        lineage = get_lineage_tracker()
+        pipeline_id = lineage.add_node(
+            node_type="transformation",
+            name="Reddit Pipeline",
+            description=f"Pipeline for scraping r/{args.subreddit} posts",
+            metadata={
+                "subreddit": args.subreddit,
+                "time_window": f"{args.hours} hours",
+                "mock_mode": MOCK_MODE,
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+        
+        # Fetch posts from the specified subreddit
+        subreddit = reddit.subreddit(args.subreddit)
+        logger.info(f"Fetching posts from r/{subreddit.display_name}")
+        
+        posts = fetch_recent_posts(subreddit, hours=args.hours)
+        
+        # Insert posts to database
+        insert_posts_to_db(posts, engine)
+        
+        # Generate lineage visualization
+        lineage.visualize(output_file='visualizations/reddit_lineage.html')
+        lineage.export_json(output_file='visualizations/reddit_lineage.json')
+        
+        logger.info(f"Successfully inserted {len(posts)} posts into database")
+        logger.info("Script completed successfully")
+        logger.info(f"Data lineage visualization saved to visualizations/reddit_lineage.html")
+        
+    except Exception as e:
+        logger.error(f"Script failed: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logger.exception("An error occurred")
-        sys.exit(1)
+    main()
 

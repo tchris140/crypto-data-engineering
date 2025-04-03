@@ -75,6 +75,7 @@ show_help() {
     echo "  test           Run pgvector tests"
     echo "  check          Run database checks"
     echo "  mock-all       Run all components in mock mode"
+    echo "  lineage        Generate data lineage visualizations"
     echo "  clean          Remove all containers and volumes"
     echo "  help           Show this help message"
     echo ""
@@ -135,6 +136,11 @@ case "$1" in
         $DOCKER_COMPOSE run --rm app reddit --mock
         print_message "3. Running RAG system in mock mode..."
         $DOCKER_COMPOSE run --rm app rag --mock --query "Bitcoin"
+        ;;
+    lineage)
+        print_message "Generating data lineage visualizations..."
+        $DOCKER_COMPOSE run --rm app lineage
+        print_message "Data lineage visualizations generated. They are available in the visualizations/ directory."
         ;;
     clean)
         print_message "Removing all containers and volumes..."

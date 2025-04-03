@@ -7,6 +7,11 @@ import logging
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
+import json
+import argparse
+
+# Import data lineage
+from data_lineage import get_lineage_tracker, LineageContext
 
 # Set up logging
 logging.basicConfig(
@@ -14,6 +19,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Global flag for mock mode
+MOCK_MODE = False
 
 # Load environment variables from .env file
 load_dotenv()
@@ -46,6 +54,12 @@ MANUAL_MAPPINGS = {
 
 # Excluded blockchain names
 EXCLUDED_NAMES = {"Bahamut"}
+
+def enable_mock_mode():
+    """Enable mock mode for testing without API calls"""
+    global MOCK_MODE
+    MOCK_MODE = True
+    logger.info("Mock mode enabled - no real API calls will be made")
 
 def format_currency(value):
     """Format currency values for display"""
@@ -185,82 +199,340 @@ def process_coin_data(coin_batch, market_data):
     
     return processed_data
 
+def get_api_key():
+    """Get API key from environment variables with error handling."""
+    api_key = os.getenv('cmc_api_key')
+    if not api_key and not MOCK_MODE:
+        logger.error("CoinMarketCap API key not found, set it as an environment variable.")
+        raise ValueError("Missing API key")
+    return api_key
+
+def fetch_tvl_data(limit=100):
+    """Fetch TVL data from DeFi Llama API with error handling.
+    
+    Args:
+        limit: Maximum number of chains to fetch
+        
+    Returns:
+        List of dictionaries containing TVL data
+    """
+    # Create a data lineage node for the source
+    lineage = get_lineage_tracker()
+    source_id = lineage.add_node(
+        node_type="source",
+        name="DeFi Llama API",
+        description="API providing Total Value Locked data for DeFi protocols",
+        metadata={"endpoint": "https://api.llama.fi/protocols", "limit": limit}
+    )
+    
+    if MOCK_MODE:
+        logger.info("Using mock data for DeFi Llama TVL")
+        try:
+            with open('mock_data/defillama_tvl.json', 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            logger.warning("Mock data file not found, generating sample data")
+            return [
+                {"name": "Ethereum", "symbol": "ETH", "tvl": 100000000000},
+                {"name": "Binance", "symbol": "BNB", "tvl": 50000000000},
+                {"name": "Polygon", "symbol": "MATIC", "tvl": 5000000000}
+            ]
+    
+    url = "https://api.llama.fi/protocols"
+    
+    try:
+        logger.info(f"Fetching TVL data from DeFi Llama API: {url}")
+        
+        with LineageContext(
+            source_nodes=source_id,
+            operation="extract",
+            target_name="DeFi Llama TVL Data",
+            target_description="Raw TVL data from DeFi Llama API",
+            metadata={"url": url, "timestamp": datetime.now().isoformat()}
+        ) as raw_data_id:
+            
+            response = requests.get(url)
+            response.raise_for_status()
+            
+            data = response.json()
+            logger.info(f"Successfully fetched {len(data)} protocols from DeFi Llama")
+            
+            # Add metadata to the lineage
+            lineage.get_node(raw_data_id).metadata.update({
+                "record_count": len(data),
+                "first_protocol": data[0]["name"] if data else None
+            })
+            
+            return data[:limit]
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching TVL data: {e}")
+        raise
+
+def fetch_market_data(symbols, api_key):
+    """Fetch market data from CoinMarketCap API with error handling.
+    
+    Args:
+        symbols: List of cryptocurrency symbols to fetch
+        api_key: CoinMarketCap API key
+        
+    Returns:
+        Dictionary containing market data
+    """
+    # Create a data lineage node for the source
+    lineage = get_lineage_tracker()
+    source_id = lineage.add_node(
+        node_type="source",
+        name="CoinMarketCap API",
+        description="API providing cryptocurrency market data",
+        metadata={"symbols": symbols}
+    )
+    
+    if MOCK_MODE:
+        logger.info("Using mock data for CoinMarketCap")
+        try:
+            with open('mock_data/coinmarketcap.json', 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            logger.warning("Mock data file not found, generating sample data")
+            mock_data = {}
+            for symbol in symbols:
+                mock_data[symbol] = {
+                    "price": 1000.0,
+                    "volume_24h": 1000000.0,
+                    "market_cap": 10000000000.0,
+                    "circulating_supply": 10000000.0
+                }
+            return mock_data
+    
+    url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+    
+    try:
+        logger.info(f"Fetching market data from CoinMarketCap API for {len(symbols)} symbols")
+        
+        with LineageContext(
+            source_nodes=source_id,
+            operation="extract",
+            target_name="CoinMarketCap Data",
+            target_description="Raw market data from CoinMarketCap API",
+            metadata={"url": url, "timestamp": datetime.now().isoformat()}
+        ) as raw_data_id:
+            
+            headers = {
+                'X-CMC_PRO_API_KEY': api_key,
+                'Accept': 'application/json'
+            }
+            
+            # Join symbols with commas for the API request
+            symbol_string = ','.join(symbols)
+            
+            params = {
+                'symbol': symbol_string
+            }
+            
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            logger.info(f"Successfully fetched market data for {len(symbols)} symbols")
+            
+            result = {}
+            for symbol in symbols:
+                try:
+                    coin_data = data['data'][symbol]
+                    result[symbol] = {
+                        'price': coin_data['quote']['USD']['price'],
+                        'volume_24h': coin_data['quote']['USD']['volume_24h'],
+                        'market_cap': coin_data['quote']['USD']['market_cap'],
+                        'circulating_supply': coin_data['circulating_supply']
+                    }
+                except KeyError:
+                    logger.warning(f"Symbol {symbol} not found in CoinMarketCap response")
+                    result[symbol] = {
+                        'price': 0.0,
+                        'volume_24h': 0.0,
+                        'market_cap': 0.0,
+                        'circulating_supply': 0.0
+                    }
+                    
+            # Add metadata to the lineage
+            lineage.get_node(raw_data_id).metadata.update({
+                "symbols_requested": len(symbols),
+                "symbols_found": len(result)
+            })
+            
+            return result
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching market data: {e}")
+        raise
+
+def process_data(tvl_data, market_data):
+    """Process and combine TVL and market data with error handling.
+    
+    Args:
+        tvl_data: List of dictionaries containing TVL data
+        market_data: Dictionary containing market data
+        
+    Returns:
+        Pandas DataFrame with processed data
+    """
+    # Create data lineage nodes for the input datasets
+    lineage = get_lineage_tracker()
+    tvl_dataset_id = lineage.add_node(
+        node_type="dataset",
+        name="TVL Dataset",
+        description="Processed TVL data",
+        metadata={"record_count": len(tvl_data)}
+    )
+    
+    market_dataset_id = lineage.add_node(
+        node_type="dataset",
+        name="Market Dataset",
+        description="Processed market data",
+        metadata={"record_count": len(market_data)}
+    )
+    
+    try:
+        logger.info("Processing and combining TVL and market data")
+        
+        with LineageContext(
+            source_nodes=[tvl_dataset_id, market_dataset_id],
+            operation="transform",
+            target_name="Combined Crypto Dataset",
+            target_description="Processed and combined TVL and market data",
+            target_type="dataset",
+            metadata={"timestamp": datetime.now().isoformat()}
+        ) as combined_data_id:
+            
+            # Create a list to store the processed data
+            processed_data = []
+            
+            for protocol in tvl_data:
+                try:
+                    name = protocol.get('name', 'Unknown')
+                    symbol = protocol.get('symbol', 'UNKNOWN')
+                    
+                    # Get market data for this symbol if available
+                    market_info = market_data.get(symbol, {
+                        'price': 0.0,
+                        'volume_24h': 0.0,
+                        'market_cap': 0.0,
+                        'circulating_supply': 0.0
+                    })
+                    
+                    processed_data.append({
+                        'Name': name,
+                        'Symbol': symbol,
+                        'TVL (USD)': protocol.get('tvl', 0.0),
+                        'Price (USD)': market_info.get('price', 0.0),
+                        'Market Cap (USD)': market_info.get('market_cap', 0.0),
+                        '24h Volume (USD)': market_info.get('volume_24h', 0.0),
+                        'Circulating Supply': market_info.get('circulating_supply', 0.0)
+                    })
+                except Exception as e:
+                    logger.warning(f"Error processing protocol {protocol.get('name', 'Unknown')}: {e}")
+            
+            df = pd.DataFrame(processed_data)
+            
+            # Add metadata to the lineage
+            lineage.get_node(combined_data_id).metadata.update({
+                "record_count": len(df),
+                "columns": df.columns.tolist()
+            })
+            
+            return df
+        
+    except Exception as e:
+        logger.error(f"Error processing data: {e}")
+        raise
+
+def save_to_csv(data, output_file='output_data.csv'):
+    """Save processed data to CSV with error handling.
+    
+    Args:
+        data: Pandas DataFrame with processed data
+        output_file: Path to the output CSV file
+    """
+    # Create a data lineage node for the input dataset
+    lineage = get_lineage_tracker()
+    data_id = lineage.add_node(
+        node_type="dataset",
+        name="Processed Dataset",
+        description="Final processed dataset ready for saving",
+        metadata={"record_count": len(data), "columns": data.columns.tolist()}
+    )
+    
+    try:
+        logger.info(f"Saving data to {output_file}")
+        
+        with LineageContext(
+            source_nodes=data_id,
+            operation="store",
+            target_name="CSV File",
+            target_description=f"CSV file at {output_file}",
+            target_type="destination",
+            metadata={"file_path": output_file, "timestamp": datetime.now().isoformat()}
+        ):
+            data.to_csv(output_file, index=False)
+            logger.info(f"Successfully saved {len(data)} records to {output_file}")
+        
+    except Exception as e:
+        logger.error(f"Error saving to CSV: {e}")
+        raise
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Fetch and process crypto data')
+    parser.add_argument('--mock', action='store_true', help='Run in mock mode without real API calls')
+    parser.add_argument('--limit', type=int, default=100, help='Maximum number of protocols to fetch')
+    parser.add_argument('--output', type=str, default='output_data.csv', help='Output file path')
+    
+    return parser.parse_args()
+
 def main():
-    """Main function to orchestrate data collection and processing"""
-    # Get coin name-to-symbol mappings
-    cmc_map = get_cmc_coin_mapping()
-    if not cmc_map:
-        logger.error("Failed to get coin mappings. Exiting.")
+    """Main function orchestrating the data pipeline."""
+    # Parse command line arguments
+    args = parse_args()
+    
+    # Enable mock mode if specified
+    if args.mock:
+        enable_mock_mode()
+    
+    # Load environment variables
+    load_dotenv()
+    
+    # Create a visualization directory
+    os.makedirs('visualizations', exist_ok=True)
+    
+    try:
+        # Fetch data
+        tvl_data = fetch_tvl_data(limit=args.limit)
+        
+        # Get unique symbols for market data
+        symbols = list(set(protocol['symbol'] for protocol in tvl_data if 'symbol' in protocol))
+        
+        # Fetch market data
+        api_key = get_api_key()
+        market_data = fetch_market_data(symbols, api_key)
+        
+        # Process data
+        processed_data = process_data(tvl_data, market_data)
+        
+        # Save to CSV
+        save_to_csv(processed_data, output_file=args.output)
+        
+        # Generate lineage visualization
+        lineage = get_lineage_tracker()
+        lineage.visualize(output_file='visualizations/defillama_lineage.html')
+        lineage.export_json(output_file='visualizations/defillama_lineage.json')
+        
+        logger.info("Data pipeline completed successfully")
+        logger.info(f"Data lineage visualization saved to visualizations/defillama_lineage.html")
+        
+    except Exception as e:
+        logger.error(f"Pipeline failed: {e}")
         sys.exit(1)
-    
-    # Get top chains by TVL
-    top_chains = get_top_chains_from_defi_llama()
-    if not top_chains:
-        logger.error("Failed to get chain data. Exiting.")
-        sys.exit(1)
-    
-    # Collect coins with symbols
-    coins = []
-    missing_coins = []
-
-    for blockchain in top_chains:
-        name = blockchain.get('name', 'N/A')
-        tvl = blockchain.get('tvl', 0)
-
-        symbol = match_coin_symbol(name, cmc_map)
-        
-        if not symbol:
-            logger.warning(f"No symbol found for {name}, skipping market data fetch...")
-            missing_coins.append(name)
-            continue
-
-        coins.append({"name": name, "symbol": symbol, "tvl": tvl})
-
-    # Batch process market data requests
-    batch_size = 10
-    all_processed_data = []
-    
-    for i in range(0, len(coins), batch_size):
-        batch = coins[i:i + batch_size]
-        
-        # Fetch market data for batch
-        market_data = fetch_market_data_batch(batch)
-        
-        # Process the data for each coin in the batch
-        processed_batch = process_coin_data(batch, market_data)
-        all_processed_data.extend(processed_batch)
-
-        # Sleep to avoid hitting API limits
-        if i + batch_size < len(coins):
-            logger.info("Sleeping to respect API rate limits...")
-            time.sleep(5)
-
-    # Log missing coins
-    if missing_coins:
-        with open("missing_coins.txt", "w") as f:
-            for coin in missing_coins:
-                f.write(f"{coin}\n")
-        logger.warning(f"Missing coins saved to 'missing_coins.txt' for manual review. Total: {len(missing_coins)}")
-    
-    # Create DataFrame and save to CSV
-    if all_processed_data:
-        df = pd.DataFrame(all_processed_data)
-        output_file = "output_data.csv"
-        df.to_csv(output_file, index=False)
-        logger.info(f"Data successfully saved to {output_file}")
-        
-        # Display final data summary
-        logger.info(f"Total coins processed: {len(df)}")
-        logger.info(f"Columns: {', '.join(df.columns)}")
-    else:
-        logger.error("No data was processed. CSV file not created.")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        logger.info("Process interrupted by user")
-        sys.exit(0)
-    except Exception as e:
-        logger.exception(f"An unexpected error occurred: {e}")
-        sys.exit(1)
+    main()

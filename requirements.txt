@@ -17,3 +17,7 @@ psycopg2-binary==2.9.9
 
 # Formatting and display
 tabulate==0.9.0
+
+# Data Lineage
+networkx>=3.0.0
+pyvis>=0.3.2

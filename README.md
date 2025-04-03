@@ -502,3 +502,51 @@ docker pull ghcr.io/yourusername/crypto-data-engineering/crypto-app:main
 # Run using the pre-built image
 docker run --rm ghcr.io/yourusername/crypto-data-engineering/crypto-app defi --mock
 ```
+
+## Data Lineage
+
+This project includes a comprehensive data lineage tracking system that provides visibility into data origins, transformations, and flows throughout the application:
+
+### Features
+
+- **Full Data Flow Tracking**: Captures the complete path of data from source to destination
+- **Visualization**: Interactive HTML visualizations of data lineage using a network graph
+- **Metadata Capture**: Records metadata at each step to understand data transformations
+- **Error Tracking**: Logs errors and exceptions within the lineage for debugging
+- **Export Capabilities**: Export lineage data to JSON for integration with other tools
+
+### Components
+
+The data lineage system consists of:
+
+- **`data_lineage.py`**: Core module implementing lineage tracking
+- **Visualizations**: Generated HTML views of the data flow
+- **Integration**: Seamless integration with all data pipelines
+
+### Example Visualizations
+
+Data lineage visualizations are automatically generated when running the pipelines:
+
+- DeFi Llama Pipeline: `visualizations/defillama_lineage.html`
+- Reddit Pipeline: `visualizations/reddit_lineage.html`
+- RAG System: `visualizations/rag_lineage.html`
+
+### Examining Data Lineage
+
+To explore the data lineage:
+
+```bash
+# Run a pipeline with lineage tracking
+./setup.sh defi
+
+# Open the generated visualization
+open visualizations/defillama_lineage.html
+```
+
+The visualization shows:
+- **Green nodes**: Data sources (APIs, databases)
+- **Blue nodes**: Transformation steps
+- **Yellow nodes**: Datasets
+- **Red nodes**: Destinations (databases, files)
+
+Hover over nodes and edges to see detailed metadata about each component and transformation.
