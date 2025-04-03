@@ -1,0 +1,65 @@
+name: Code Quality and Security
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 1'  # Run weekly on Mondays
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit safety
+          pip install -r requirements.txt
+
+      - name: Run Bandit security scanner
+        run: bandit -r . -x ./tests,./venv -f json -o bandit-results.json
+
+      - name: Check for vulnerabilities in dependencies
+        run: safety check -r requirements.txt
+
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pylint pytest pytest-cov
+          pip install -r requirements.txt
+
+      - name: Run pylint
+        run: |
+          pylint --disable=C0111,C0103,C0303,W1201,W1202,C0301,C0302,C0330,C0326,W0621,W0613,W0612,R0914,R0912,R0915,R0913,R0903,R0902,R0801,R0401,E1101 $(find . -name "*.py" | grep -v "test_" | grep -v "__pycache__" | grep -v ".venv")
+
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=. --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false 
