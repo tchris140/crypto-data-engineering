@@ -63,6 +63,15 @@ jobs:
           docker-compose build --no-cache --pull
           # Print the Dockerfile being used
           cat Dockerfile
+          # List files in the current directory
+          ls -la
+          # Make sure entrypoint.sh is present and executable
+          file entrypoint.sh
+          
+      - name: Debug container contents
+        run: |
+          # Create a test container with a simple command that won't fail on missing entrypoint
+          docker run --rm --entrypoint /bin/bash $(docker-compose config | grep "image:" | head -1 | awk '{print $2}') -c "ls -la /app/ && echo 'Contents of /app directory' || echo 'Command failed'"
 
       - name: Start containers
         run: docker-compose up -d

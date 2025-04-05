@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-# Version 2.0 - pgvector build removed and using pre-built image
+# Version 2.1 - Fixed entrypoint order with specific copy operation
 
 # Set working directory
 WORKDIR /app
@@ -23,15 +23,21 @@ RUN pip install --no-cache-dir networkx pyvis
 # Create visualization directory
 RUN mkdir -p /app/visualizations
 
-# Copy entrypoint script and make executable
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
-
-# Copy project files
-COPY . .
-
 # Create a directory for logs
 RUN mkdir -p /app/logs
+
+# Copy project files EXCEPT entrypoint.sh (which will be copied separately)
+COPY . .
+
+# Debug - list files in app directory
+RUN ls -la /app/
+
+# Copy entrypoint script separately and make executable (after copying project files)
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Debug - verify entrypoint exists
+RUN ls -la /app/entrypoint.sh
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
