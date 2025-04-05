@@ -9,12 +9,15 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     git \
+    gcc \
+    postgresql-server-dev-all \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pgvector from source
+# Install pgvector from source with proper error handling and verbose output
 RUN git clone https://github.com/pgvector/pgvector.git \
     && cd pgvector \
-    && make \
+    && make USE_PGXS=1 PG_CONFIG=/usr/bin/pg_config \
+    && ls -la \
     && cd ..
 
 # Copy requirements first for better caching
