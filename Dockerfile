@@ -3,22 +3,13 @@ FROM python:3.9-slim
 # Set working directory
 WORKDIR /app
 
-# Install PostgreSQL client and build dependencies
+# Install PostgreSQL client and other necessary dependencies
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     build-essential \
     libpq-dev \
     git \
-    gcc \
-    postgresql-server-dev-all \
     && rm -rf /var/lib/apt/lists/*
-
-# Install pgvector from source with proper error handling and verbose output
-RUN git clone https://github.com/pgvector/pgvector.git \
-    && cd pgvector \
-    && make USE_PGXS=1 PG_CONFIG=/usr/bin/pg_config \
-    && ls -la \
-    && cd ..
 
 # Copy requirements first for better caching
 COPY requirements.txt .
