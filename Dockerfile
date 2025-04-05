@@ -1,5 +1,7 @@
 FROM python:3.9-slim
 
+# Version 2.0 - pgvector build removed and using pre-built image
+
 # Set working directory
 WORKDIR /app
 

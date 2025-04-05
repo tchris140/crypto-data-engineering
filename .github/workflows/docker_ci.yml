@@ -58,7 +58,11 @@ jobs:
           docker-compose --version
 
       - name: Build Docker images
-        run: docker-compose build
+        run: |
+          # Force rebuilding images without cache
+          docker-compose build --no-cache --pull
+          # Print the Dockerfile being used
+          cat Dockerfile
 
       - name: Start containers
         run: docker-compose up -d
