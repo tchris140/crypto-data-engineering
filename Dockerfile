@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-# Version 2.1 - Fixed entrypoint order with specific copy operation
+# Version 3.0 - Simplified build process with direct entrypoint
 
 # Set working directory
 WORKDIR /app
@@ -20,30 +20,25 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install data lineage visualization dependencies
 RUN pip install --no-cache-dir networkx pyvis
 
-# Create visualization directory
-RUN mkdir -p /app/visualizations
+# Create directories
+RUN mkdir -p /app/visualizations /app/logs
 
-# Create a directory for logs
-RUN mkdir -p /app/logs
-
-# Copy project files EXCEPT entrypoint.sh (which will be copied separately)
-COPY . .
-
-# Debug - list files in app directory
-RUN ls -la /app/
-
-# Copy entrypoint script separately and make executable (after copying project files)
-COPY entrypoint.sh /app/entrypoint.sh
+# Copy entrypoint script first
+COPY entrypoint.sh .
 RUN chmod +x /app/entrypoint.sh
 
-# Debug - verify entrypoint exists
-RUN ls -la /app/entrypoint.sh
+# Copy all project files
+COPY . .
+
+# Debug commands to verify file structure
+RUN echo "Listing all files in /app:" && ls -la /app/
+RUN echo "Checking entrypoint script:" && cat /app/entrypoint.sh
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 
-# Set the entrypoint
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Use shell form of ENTRYPOINT for better error handling
+ENTRYPOINT /bin/bash /app/entrypoint.sh
 
 # Default command (show help)
 CMD ["help"] 
