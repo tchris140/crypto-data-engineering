@@ -493,6 +493,38 @@ make
 make install
 ```
 
+**Alternative Solution**:
+Use the pre-built pgvector Docker image as configured in docker-compose.yml:
+```yaml
+postgres:
+  image: pgvector/pgvector:pg14
+```
+
+### Docker Build Issues
+
+**Issue**: "failed to solve: process... did not complete successfully" when building Docker image
+
+**Solution**:
+- Make sure Docker has enough resources allocated (memory, CPU)
+- Check if your Dockerfile has the correct paths and dependencies
+- Try building with `--no-cache` flag: `docker-compose build --no-cache`
+
+### CI/CD Pipeline Issues
+
+**Issue**: GitHub Actions workflow fails with Docker Compose not found
+
+**Solution**:
+- Ensure the workflow includes steps to install Docker Compose
+- Check that Docker Compose version is compatible with your compose file
+- Use the Docker Compose plugin or standalone installation based on the runner environment
+
+**Issue**: Security scan failures in CI pipeline
+
+**Solution**:
+- Address the security issues identified in the scan
+- For development purposes, you can use `continue-on-error: true` in the workflow
+- Add specific exclusions for known false positives
+
 ### Database Connection Issues
 
 **Issue**: "Error connecting to the database"
@@ -501,24 +533,7 @@ make install
 - Verify that PostgreSQL is running: `pg_isready`
 - Check your `.env` file for correct credentials
 - Ensure the database exists: `psql -c "SELECT 1" -d your_database_name`
-
-### API Rate Limiting
-
-**Issue**: "API rate limit exceeded" errors
-
-**Solution**:
-- CoinMarketCap: Upgrade your plan or reduce request frequency
-- Reddit: Implement exponential backoff in your requests
-- OpenAI: Add retry logic with increasing delays
-
-### Vector Search Not Working
-
-**Issue**: Vector similarity search returns incorrect results
-
-**Solution**:
-- Verify pgvector extension: `SELECT * FROM pg_extension WHERE extname = 'vector'`
-- Check embedding dimensions match (should be 1536 for OpenAI)
-- Ensure embeddings are properly cast to vector type
+- For Docker setup, ensure the postgres service is running: `docker-compose ps`
 
 ## Advanced Usage
 
@@ -542,6 +557,47 @@ For processing large amounts of data:
 # Process Reddit posts in batches of 50
 python Reddit_scraper.py --batch_size 50 --total 1000
 ```
+
+### Docker Configuration Details
+
+The Docker setup includes several important components:
+
+1. **entrypoint.sh**: A bash script that serves as the entry point for the Docker container. It provides a command-line interface for running different components of the application:
+   ```bash
+   # Docker container command format
+   docker-compose run --rm app [command] [args]
+   
+   # Available commands:
+   # - defi: Run DeFi Llama scraper
+   # - reddit: Run Reddit scraper
+   # - rag: Run improved RAG system
+   # - langchain-rag: Run LangChain RAG implementation
+   # - example: Run example usage script
+   # - migrate: Run migration script
+   # - compare: Compare different RAG implementations
+   # - test: Run pgvector tests
+   # - check: Run database checks
+   # - lineage: Generate data lineage visualizations
+   ```
+
+2. **pgvector/pgvector:pg14**: The Docker image for PostgreSQL with the pgvector extension pre-installed:
+   - Eliminates the need to build pgvector from source
+   - Supports vector operations directly in the database
+   - Compatible with PostgreSQL 14
+   - Includes all necessary extensions for vector similarity search
+
+3. **Docker Networks**: The services communicate through a Docker network:
+   ```yaml
+   networks:
+     crypto_network:
+       driver: bridge
+   ```
+
+4. **Volume Persistence**: Data is persisted using named volumes:
+   ```yaml
+   volumes:
+     postgres_data: # Persists database data between container restarts
+   ```
 
 ## Dockerized Setup
 
@@ -629,6 +685,18 @@ This project uses GitHub Actions for continuous integration and deployment:
 - **Security Scanning**: Performs security checks on dependencies and code to identify vulnerabilities.
 - **Container Registry**: Builds and pushes Docker images to GitHub Container Registry for versioned deployments.
 
+### CI/CD Configuration
+
+The project includes several GitHub Actions workflows:
+
+- `.github/workflows/docker_ci.yml`: Tests Docker builds and container functionality
+- `.github/workflows/code_quality.yml`: Performs code quality and security checks
+- `.github/workflows/docker_build_push.yml`: Builds and pushes images to GitHub Container Registry
+- `.github/workflows/crypto_data_pipeline.yml`: Runs the DeFi Llama data pipeline
+- `.github/workflows/reddit_scraper.yml`: Runs the Reddit data collection pipeline
+
+All workflows are configured to run in CI mode with mock data to avoid API rate limits and ensure consistent testing.
+
 ### Running CI Locally
 
 You can test the CI pipeline locally using the following commands:
@@ -658,6 +726,69 @@ docker pull ghcr.io/yourusername/crypto-data-engineering/crypto-app:main
 # Run using the pre-built image
 docker run --rm ghcr.io/yourusername/crypto-data-engineering/crypto-app defi --mock
 ```
+
+## Troubleshooting
+
+### pgvector Installation Issues
+
+**Issue**: Error when creating the vector extension
+```
+ERROR: could not open extension control file: No such file or directory
+```
+
+**Solution**: 
+```sql
+-- Install the PostgreSQL development packages first
+sudo apt-get install postgresql-server-dev-14
+
+-- Then clone and install pgvector
+git clone https://github.com/pgvector/pgvector.git
+cd pgvector
+make
+make install
+```
+
+**Alternative Solution**:
+Use the pre-built pgvector Docker image as configured in docker-compose.yml:
+```yaml
+postgres:
+  image: pgvector/pgvector:pg14
+```
+
+### Docker Build Issues
+
+**Issue**: "failed to solve: process... did not complete successfully" when building Docker image
+
+**Solution**:
+- Make sure Docker has enough resources allocated (memory, CPU)
+- Check if your Dockerfile has the correct paths and dependencies
+- Try building with `--no-cache` flag: `docker-compose build --no-cache`
+
+### CI/CD Pipeline Issues
+
+**Issue**: GitHub Actions workflow fails with Docker Compose not found
+
+**Solution**:
+- Ensure the workflow includes steps to install Docker Compose
+- Check that Docker Compose version is compatible with your compose file
+- Use the Docker Compose plugin or standalone installation based on the runner environment
+
+**Issue**: Security scan failures in CI pipeline
+
+**Solution**:
+- Address the security issues identified in the scan
+- For development purposes, you can use `continue-on-error: true` in the workflow
+- Add specific exclusions for known false positives
+
+### Database Connection Issues
+
+**Issue**: "Error connecting to the database"
+
+**Solution**: 
+- Verify that PostgreSQL is running: `pg_isready`
+- Check your `.env` file for correct credentials
+- Ensure the database exists: `psql -c "SELECT 1" -d your_database_name`
+- For Docker setup, ensure the postgres service is running: `docker-compose ps`
 
 ## Data Lineage
 
