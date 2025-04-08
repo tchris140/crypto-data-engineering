@@ -346,8 +346,10 @@ class LineageContext:
                 # Update the target node with error information if we have a valid target_id
                 if self.target_id:
                     node = self.lineage.get_node(self.target_id)
-                    if node and isinstance(node, dict):
+                    if node:
                         # Ensure metadata exists and is a dictionary
+                        if not isinstance(node, dict):
+                            node = {"metadata": {}}
                         if "metadata" not in node:
                             node["metadata"] = {}
                         elif not isinstance(node["metadata"], dict):
