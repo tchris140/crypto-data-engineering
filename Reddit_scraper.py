@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Global flag for mock mode
 MOCK_MODE = False
+TEST_MODE = False
 
 def enable_mock_mode():
     """Enable mock mode for testing without API calls"""
@@ -138,15 +139,25 @@ def init_openai():
 
 def get_db_connection():
     """Create database connection with error handling."""
-    if MOCK_MODE or os.getenv('CI'):
+    if MOCK_MODE or os.getenv('CI') or TEST_MODE:
         logger.info("Using mock database connection")
         return create_engine('sqlite:///:memory:')
         
     try:
-        return create_engine(
+        # Load environment variables
+        load_dotenv()
+        
+        # Create PostgreSQL connection string
+        conn_string = (
             f'postgresql://{get_env_var("DB_USER")}:{get_env_var("DB_PASSWORD")}@'
             f'{get_env_var("DB_HOST")}:{get_env_var("DB_PORT")}/{get_env_var("DB_NAME")}'
         )
+        
+        # Create and return the engine
+        engine = create_engine(conn_string)
+        logger.info("Successfully created PostgreSQL connection")
+        return engine
+        
     except Exception as e:
         logger.error(f"Failed to create database connection: {e}")
         raise
@@ -276,8 +287,8 @@ def insert_posts_to_db(posts, engine):
             conn = engine.raw_connection()
             cursor = conn.cursor()
             
-            if MOCK_MODE or os.getenv('CI'):
-                # Create mock table for testing
+            if MOCK_MODE or os.getenv('CI') or TEST_MODE:
+                # Create a simple table for testing
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS reddit_embeddings (
                         post_id TEXT PRIMARY KEY,
@@ -286,11 +297,35 @@ def insert_posts_to_db(posts, engine):
                         score INTEGER,
                         num_comments INTEGER,
                         created_utc TIMESTAMP,
-                        embedding TEXT,
-                        embedding_vector TEXT
+                        embedding TEXT
                     )
                 """)
                 conn.commit()
+                
+                # Simple insert query for testing
+                insert_query = """
+                    INSERT INTO reddit_embeddings 
+                        (post_id, title, text, score, num_comments, created_utc, embedding)
+                    VALUES %s
+                    ON CONFLICT (post_id) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        text = EXCLUDED.text,
+                        score = EXCLUDED.score,
+                        num_comments = EXCLUDED.num_comments,
+                        created_utc = EXCLUDED.created_utc,
+                        embedding = EXCLUDED.embedding
+                """
+                
+                records = [
+                    (row.post_id, row.title, row.text, row.score, 
+                     row.num_comments, row.created_utc, 
+                     f"[{','.join(map(str, row.embedding))}]")
+                    for row in df.itertuples(index=False)
+                ]
+                
+                execute_values(cursor, insert_query, records, template="""
+                    (%s, %s, %s, %s, %s, %s, %s)
+                """)
             else:
                 # Check if we need to add the vector column
                 cursor.execute("""
@@ -306,39 +341,48 @@ def insert_posts_to_db(posts, engine):
                 if not has_vector_column:
                     logger.info("Adding embedding_vector column to reddit_embeddings table")
                     cursor.execute("ALTER TABLE reddit_embeddings ADD COLUMN embedding_vector vector(1536)")
-                    conn.commit()
-            
-            # PostgreSQL with ON CONFLICT
-            insert_query = """
-                INSERT INTO reddit_embeddings 
-                    (post_id, title, text, score, num_comments, created_utc, embedding, embedding_vector)
-                VALUES %s
-                ON CONFLICT (post_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    text = EXCLUDED.text,
-                    score = EXCLUDED.score,
-                    num_comments = EXCLUDED.num_comments,
-                    created_utc = EXCLUDED.created_utc,
-                    embedding = EXCLUDED.embedding,
-                    embedding_vector = EXCLUDED.embedding_vector
-            """
-            
-            records = [
-                (row.post_id, row.title, row.text, row.score, 
-                 row.num_comments, row.created_utc, 
-                 f"[{','.join(map(str, row.embedding))}]",
-                 f"[{','.join(map(str, row.embedding))}]")
-                for row in df.itertuples(index=False)
-            ]
-            
-            # Use a simpler template without explicit vector casting in mock mode
-            template = """
-                (%s, %s, %s, %s, %s, %s, %s, %s::vector)
-            """ if not (MOCK_MODE or os.getenv('CI')) else """
-                (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            
-            execute_values(cursor, insert_query, records, template=template)
+                
+                # Create table if it doesn't exist
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS reddit_embeddings (
+                        post_id TEXT PRIMARY KEY,
+                        title TEXT,
+                        text TEXT,
+                        score INTEGER,
+                        num_comments INTEGER,
+                        created_utc TIMESTAMP,
+                        embedding TEXT,
+                        embedding_vector vector(1536)
+                    )
+                """)
+                conn.commit()
+                
+                # PostgreSQL with vector support
+                insert_query = """
+                    INSERT INTO reddit_embeddings 
+                        (post_id, title, text, score, num_comments, created_utc, embedding, embedding_vector)
+                    VALUES %s
+                    ON CONFLICT (post_id) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        text = EXCLUDED.text,
+                        score = EXCLUDED.score,
+                        num_comments = EXCLUDED.num_comments,
+                        created_utc = EXCLUDED.created_utc,
+                        embedding = EXCLUDED.embedding,
+                        embedding_vector = EXCLUDED.embedding_vector
+                """
+                
+                records = [
+                    (row.post_id, row.title, row.text, row.score, 
+                     row.num_comments, row.created_utc, 
+                     f"[{','.join(map(str, row.embedding))}]",
+                     f"[{','.join(map(str, row.embedding))}]")
+                    for row in df.itertuples(index=False)
+                ]
+                
+                execute_values(cursor, insert_query, records, template="""
+                    (%s, %s, %s, %s, %s, %s, %s, %s::vector)
+                """)
             
             conn.commit()
             
@@ -359,22 +403,19 @@ def insert_posts_to_db(posts, engine):
             conn.close()
 
 def main():
-    """Main function to orchestrate the Reddit scraping process"""
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Reddit Scraper')
+    """Main function to orchestrate the Reddit scraping process."""
+    parser = argparse.ArgumentParser(description='Reddit Crypto Scraper')
     parser.add_argument('--mock', action='store_true', help='Run in mock mode without real API calls')
-    parser.add_argument('--subreddit', type=str, default='cryptocurrency', help='Subreddit to scrape')
-    parser.add_argument('--hours', type=int, default=24, help='Time window in hours')
+    parser.add_argument('--test', action='store_true', help='Run in test mode with simplified database operations')
     args = parser.parse_args()
     
     if args.mock:
         enable_mock_mode()
     
-    # Load environment variables
-    load_dotenv()
-    
-    # Create a visualization directory
-    os.makedirs('visualizations', exist_ok=True)
+    if args.test:
+        global TEST_MODE
+        TEST_MODE = True
+        logger.info("Test mode enabled - using simplified database operations")
     
     try:
         # Initialize clients
@@ -387,31 +428,22 @@ def main():
         pipeline_id = lineage.add_node(
             node_type="transformation",
             name="Reddit Pipeline",
-            description=f"Pipeline for scraping r/{args.subreddit} posts",
-            metadata={
-                "subreddit": args.subreddit,
-                "time_window": f"{args.hours} hours",
-                "mock_mode": MOCK_MODE,
-                "timestamp": datetime.now().isoformat()
-            }
+            description="Pipeline for scraping Reddit posts",
+            metadata={"timestamp": datetime.now().isoformat()}
         )
         
-        # Fetch posts from the specified subreddit
-        subreddit = reddit.subreddit(args.subreddit)
-        logger.info(f"Fetching posts from r/{subreddit.display_name}")
-        
-        posts = fetch_recent_posts(subreddit, hours=args.hours)
+        # Fetch posts from r/cryptocurrency
+        logger.info("Fetching posts from r/cryptocurrency")
+        posts = fetch_recent_posts(reddit.subreddit("cryptocurrency"))
         
         # Insert posts to database
         insert_posts_to_db(posts, engine)
         
         # Generate lineage visualization
-        lineage.visualize(output_file='visualizations/reddit_lineage.html')
-        lineage.export_json(output_file='visualizations/reddit_lineage.json')
+        lineage.visualize()
+        lineage.export_json()
         
-        logger.info(f"Successfully inserted {len(posts)} posts into database")
         logger.info("Script completed successfully")
-        logger.info(f"Data lineage visualization saved to visualizations/reddit_lineage.html")
         
     except Exception as e:
         logger.error(f"Script failed: {e}")

@@ -57,261 +57,121 @@ class DataLineage:
                 logger.error(f"Failed to initialize in-memory database: {e2}")
     
     def _init_db(self):
-        """Initialize the SQLite database schema if it doesn't exist."""
+        """Initialize SQLite database with proper SQLite syntax."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Create nodes table
-                cursor.execute('''
+            self.conn = sqlite3.connect(self.db_path)
+            self.cursor = self.conn.cursor()
+            
+            # Create nodes table with SQLite syntax
+            self.cursor.execute("""
                 CREATE TABLE IF NOT EXISTS nodes (
-                    node_id TEXT PRIMARY KEY,
-                    node_type TEXT NOT NULL,
-                    name TEXT NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    node_type TEXT,
+                    name TEXT,
                     description TEXT,
-                    created_at TEXT NOT NULL,
                     metadata TEXT
                 )
-                ''')
-                
-                # Create edges table
-                cursor.execute('''
+            """)
+            
+            # Create edges table with SQLite syntax
+            self.cursor.execute("""
                 CREATE TABLE IF NOT EXISTS edges (
-                    edge_id TEXT PRIMARY KEY,
-                    source_id TEXT NOT NULL,
-                    target_id TEXT NOT NULL,
-                    operation TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    source_id TEXT,
+                    target_id TEXT,
+                    operation TEXT,
                     metadata TEXT,
-                    FOREIGN KEY (source_id) REFERENCES nodes (node_id),
-                    FOREIGN KEY (target_id) REFERENCES nodes (node_id)
+                    FOREIGN KEY (source_id) REFERENCES nodes (id),
+                    FOREIGN KEY (target_id) REFERENCES nodes (id)
                 )
-                ''')
-                
-                conn.commit()
-                logger.info(f"Initialized data lineage database at {self.db_path}")
-        except Exception as e:
-            logger.error(f"Database initialization error: {e}")
+            """)
+            
+            self.conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Error initializing database: {e}")
             raise
     
-    def add_node(self, node_type: str, name: str, description: str = "",
-                 metadata: Optional[Dict[str, Any]] = None) -> str:
-        """Add a node to the lineage graph.
-        
-        Args:
-            node_type: Type of node ('source', 'transformation', 'destination', etc.)
-            name: Name of the node
-            description: Description of the node
-            metadata: Additional metadata about the node
-            
-        Returns:
-            node_id: ID of the created node
-        """
+    def add_node(self, node_type, name, description, metadata=None):
+        """Add a node to the lineage graph with SQLite syntax."""
         try:
             node_id = str(uuid.uuid4())
-            created_at = datetime.datetime.now().isoformat()
-            metadata = metadata or {}
+            metadata_json = json.dumps(metadata) if metadata else "{}"
             
-            node = DataNode(
-                node_id=node_id,
-                node_type=node_type,
-                name=name,
-                description=description,
-                created_at=created_at,
-                metadata=metadata
-            )
+            self.cursor.execute("""
+                INSERT INTO nodes (id, node_type, name, description, metadata)
+                VALUES (?, ?, ?, ?, ?)
+            """, (node_id, node_type, name, description, metadata_json))
             
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?)",
-                    (node.node_id, node.node_type, node.name, node.description,
-                     node.created_at, json.dumps(node.metadata))
-                )
-                conn.commit()
-                
+            self.conn.commit()
             logger.info(f"Added node: {name} ({node_type})")
             return node_id
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error(f"Error adding node: {e}")
-            # Return a dummy node ID to prevent crashes
-            dummy_id = f"dummy_{str(uuid.uuid4())}"
-            logger.info(f"Returning dummy node ID: {dummy_id}")
-            return dummy_id
+            raise
     
-    def add_edge(self, source_id: str, target_id: str, operation: str,
-                metadata: Optional[Dict[str, Any]] = None) -> str:
-        """Add an edge between two nodes in the lineage graph.
-        
-        Args:
-            source_id: ID of the source node
-            target_id: ID of the target node
-            operation: Type of operation ('extract', 'transform', 'load', etc.)
-            metadata: Additional metadata about the operation
-            
-        Returns:
-            edge_id: ID of the created edge
-        """
+    def add_edge(self, source_id, target_id, operation, metadata=None):
+        """Add an edge to the lineage graph with SQLite syntax."""
         try:
-            cursor = self.conn.cursor()
+            edge_id = str(uuid.uuid4())
+            metadata_json = json.dumps(metadata) if metadata else "{}"
             
-            # Check if edge already exists
-            cursor.execute("""
-                SELECT 1 FROM edges 
-                WHERE source_id = ? AND target_id = ? AND operation = ?
-            """, (source_id, target_id, operation))
-            
-            if cursor.fetchone():
-                logger.info(f"Edge already exists: {operation} from {source_id} to {target_id}")
-                return
-            
-            # Add edge with proper SQLite syntax
-            cursor.execute("""
-                INSERT INTO edges (edge_id, source_id, target_id, operation, created_at, metadata)
-                VALUES (?, ?, ?, ?, datetime('now'), ?)
-            """, (str(uuid.uuid4()), source_id, target_id, operation, json.dumps(metadata)))
+            self.cursor.execute("""
+                INSERT INTO edges (id, source_id, target_id, operation, metadata)
+                VALUES (?, ?, ?, ?, ?)
+            """, (edge_id, source_id, target_id, operation, metadata_json))
             
             self.conn.commit()
             logger.info(f"Added edge: {operation} from {source_id} to {target_id}")
-            
+            return edge_id
         except sqlite3.Error as e:
             logger.error(f"Error adding edge: {e}")
             raise
     
-    def get_node(self, node_id: str) -> Optional[DataNode]:
-        """Get a node by its ID.
-        
-        Args:
-            node_id: ID of the node to retrieve
-            
-        Returns:
-            DataNode or None if not found
-        """
+    def get_node(self, node_id):
+        """Get a node from the lineage graph with SQLite syntax."""
         try:
-            cursor = self.conn.cursor()
-            cursor.execute("""
-                SELECT node_id, node_type, name, description, created_at, metadata
+            self.cursor.execute("""
+                SELECT id, node_type, name, description, metadata
                 FROM nodes
-                WHERE node_id = ?
+                WHERE id = ?
             """, (node_id,))
             
-            row = cursor.fetchone()
+            row = self.cursor.fetchone()
             if row:
-                metadata = json.loads(row[5]) if row[5] else {}
-                return DataNode(
-                    node_id=row[0],
-                    node_type=row[1],
-                    name=row[2],
-                    description=row[3],
-                    created_at=row[4],
-                    metadata=metadata
-                )
+                return {
+                    "id": row[0],
+                    "node_type": row[1],
+                    "name": row[2],
+                    "description": row[3],
+                    "metadata": json.loads(row[4]) if row[4] else {}
+                }
             return None
         except sqlite3.Error as e:
             logger.error(f"Error getting node: {e}")
-            return None
+            raise
     
-    def get_edge(self, edge_id: str) -> Optional[DataEdge]:
-        """Get an edge by its ID.
-        
-        Args:
-            edge_id: ID of the edge to retrieve
-            
-        Returns:
-            DataEdge or None if not found
-        """
+    def get_edges(self, node_id):
+        """Get edges connected to a node with SQLite syntax."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM edges WHERE edge_id = ?", (edge_id,))
-                row = cursor.fetchone()
-                
-                if row:
-                    try:
-                        metadata = json.loads(row['metadata'])
-                    except json.JSONDecodeError:
-                        logger.warning(f"Invalid JSON metadata for edge {edge_id}, using empty dict")
-                        metadata = {}
-                        
-                    return DataEdge(
-                        edge_id=row['edge_id'],
-                        source_id=row['source_id'],
-                        target_id=row['target_id'],
-                        operation=row['operation'],
-                        timestamp=row['created_at'],
-                        metadata=metadata
-                    )
-                return None
-        except Exception as e:
-            logger.error(f"Error getting edge {edge_id}: {e}")
-            return None
-    
-    def get_outgoing_edges(self, node_id: str) -> List[DataEdge]:
-        """Get all outgoing edges from a node.
-        
-        Args:
-            node_id: ID of the node
-            
-        Returns:
-            List of DataEdge objects representing outgoing edges
-        """
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("""
-                SELECT edge_id, source_id, target_id, operation, created_at, metadata
+            self.cursor.execute("""
+                SELECT id, source_id, target_id, operation, metadata
                 FROM edges
-                WHERE source_id = ?
-            """, (node_id,))
+                WHERE source_id = ? OR target_id = ?
+            """, (node_id, node_id))
             
             edges = []
-            for row in cursor.fetchall():
-                metadata = json.loads(row[5]) if row[5] else {}
-                edges.append(DataEdge(
-                    edge_id=row[0],
-                    source_id=row[1],
-                    target_id=row[2],
-                    operation=row[3],
-                    timestamp=row[4],
-                    metadata=metadata
-                ))
+            for row in self.cursor.fetchall():
+                edges.append({
+                    "id": row[0],
+                    "source_id": row[1],
+                    "target_id": row[2],
+                    "operation": row[3],
+                    "metadata": json.loads(row[4]) if row[4] else {}
+                })
             return edges
-        except Exception as e:
-            logger.error(f"Error getting outgoing edges for node {node_id}: {e}")
-            return []
-    
-    def get_incoming_edges(self, node_id: str) -> List[DataEdge]:
-        """Get all incoming edges to a node.
-        
-        Args:
-            node_id: ID of the node
-            
-        Returns:
-            List of DataEdge objects representing incoming edges
-        """
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("""
-                SELECT edge_id, source_id, target_id, operation, created_at, metadata
-                FROM edges
-                WHERE target_id = ?
-            """, (node_id,))
-            
-            edges = []
-            for row in cursor.fetchall():
-                metadata = json.loads(row[5]) if row[5] else {}
-                edges.append(DataEdge(
-                    edge_id=row[0],
-                    source_id=row[1],
-                    target_id=row[2],
-                    operation=row[3],
-                    timestamp=row[4],
-                    metadata=metadata
-                ))
-            return edges
-        except Exception as e:
-            logger.error(f"Error getting incoming edges for node {node_id}: {e}")
-            return []
+        except sqlite3.Error as e:
+            logger.error(f"Error getting edges: {e}")
+            raise
     
     def visualize(self, output_file: str = "data_lineage.html"):
         """Generate a visualization of the lineage graph.
@@ -327,7 +187,7 @@ class DataLineage:
             
             # Add nodes
             cursor = self.conn.cursor()
-            cursor.execute("SELECT node_id, name, node_type FROM nodes")
+            cursor.execute("SELECT id, name, node_type FROM nodes")
             for row in cursor.fetchall():
                 G.add_node(row[0], label=row[1], type=row[2])
             
@@ -373,11 +233,11 @@ class DataLineage:
                         metadata = {}
                         
                     node = {
-                        "node_id": row['node_id'],
+                        "node_id": row['id'],
                         "node_type": row['node_type'],
                         "name": row['name'],
                         "description": row['description'],
-                        "created_at": row['created_at'],
+                        "created_at": row['metadata'],
                         "metadata": metadata
                     }
                     lineage_data["nodes"].append(node)
@@ -391,11 +251,11 @@ class DataLineage:
                         metadata = {}
                         
                     edge = {
-                        "edge_id": row['edge_id'],
+                        "edge_id": row['id'],
                         "source_id": row['source_id'],
                         "target_id": row['target_id'],
                         "operation": row['operation'],
-                        "timestamp": row['created_at'],
+                        "timestamp": row['metadata'],
                         "metadata": metadata
                     }
                     lineage_data["edges"].append(edge)
