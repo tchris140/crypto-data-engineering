@@ -32,7 +32,7 @@ jobs:
       env:
         REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
         REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
-        REDDIT_USER_AGENT: "script:crypto_data_scraper:v1.0 (by /u/${{ secrets.REDDIT_USERNAME }})"
+        REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         DB_USER: ${{ secrets.DB_USER }}
         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
