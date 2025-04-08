@@ -138,7 +138,16 @@ class DataLineage:
             
             row = self.cursor.fetchone()
             if row:
-                metadata = json.loads(row[4]) if row[4] else {}
+                # Ensure metadata is properly initialized as a dictionary
+                metadata = {}
+                if row[4]:  # If metadata exists
+                    try:
+                        metadata = json.loads(row[4])
+                        if not isinstance(metadata, dict):
+                            metadata = {}
+                    except json.JSONDecodeError:
+                        metadata = {}
+                
                 return {
                     "id": row[0],
                     "node_type": row[1],
