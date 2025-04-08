@@ -95,7 +95,13 @@ class DataLineage:
         """Add a node to the lineage graph with SQLite syntax."""
         try:
             node_id = str(uuid.uuid4())
-            metadata_json = json.dumps(metadata) if metadata else "{}"
+            # Ensure metadata is always a dictionary
+            if metadata is None:
+                metadata = {}
+            elif not isinstance(metadata, dict):
+                metadata = {}
+            
+            metadata_json = json.dumps(metadata)
             
             self.cursor.execute("""
                 INSERT INTO nodes (id, node_type, name, description, metadata)
