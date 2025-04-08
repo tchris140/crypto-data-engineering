@@ -138,12 +138,13 @@ class DataLineage:
             
             row = self.cursor.fetchone()
             if row:
+                metadata = json.loads(row[4]) if row[4] else {}
                 return {
                     "id": row[0],
                     "node_type": row[1],
                     "name": row[2],
                     "description": row[3],
-                    "metadata": json.loads(row[4]) if row[4] else {}
+                    "metadata": metadata
                 }
             return None
         except sqlite3.Error as e:
@@ -161,12 +162,13 @@ class DataLineage:
             
             edges = []
             for row in self.cursor.fetchall():
+                metadata = json.loads(row[4]) if row[4] else {}
                 edges.append({
                     "id": row[0],
                     "source_id": row[1],
                     "target_id": row[2],
                     "operation": row[3],
-                    "metadata": json.loads(row[4]) if row[4] else {}
+                    "metadata": metadata
                 })
             return edges
         except sqlite3.Error as e:
@@ -174,11 +176,7 @@ class DataLineage:
             raise
     
     def visualize(self, output_file: str = "data_lineage.html"):
-        """Generate a visualization of the lineage graph.
-        
-        Args:
-            output_file: Path to the output HTML file
-        """
+        """Generate a visualization of the data lineage graph."""
         try:
             import networkx as nx
             import matplotlib.pyplot as plt
@@ -186,86 +184,75 @@ class DataLineage:
             G = nx.DiGraph()
             
             # Add nodes
-            cursor = self.conn.cursor()
-            cursor.execute("SELECT id, name, node_type FROM nodes")
-            for row in cursor.fetchall():
+            self.cursor.execute("SELECT id, name, node_type FROM nodes")
+            for row in self.cursor.fetchall():
                 G.add_node(row[0], label=row[1], type=row[2])
             
             # Add edges
-            cursor.execute("SELECT source_id, target_id, operation FROM edges")
-            for row in cursor.fetchall():
+            self.cursor.execute("SELECT source_id, target_id, operation FROM edges")
+            for row in self.cursor.fetchall():
                 G.add_edge(row[0], row[1], label=row[2])
             
-            # Generate visualization
+            # Draw the graph
             plt.figure(figsize=(12, 8))
             pos = nx.spring_layout(G)
             nx.draw(G, pos, with_labels=True, node_color='lightblue', 
-                   node_size=2000, font_size=8, font_weight='bold')
+                   node_size=2000, font_size=10, font_weight='bold')
+            edge_labels = nx.get_edge_attributes(G, 'label')
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+            
             plt.savefig(output_file)
-            logger.info(f"Lineage visualization saved to {output_file}")
+            plt.close()
+            
+            logger.info(f"Data lineage visualization saved to {output_file}")
             
         except Exception as e:
             logger.error(f"Error generating visualization: {e}")
             raise
     
     def export_json(self, output_file: str = "data_lineage.json"):
-        """Export the lineage graph to a JSON file.
-        
-        Args:
-            output_file: Path to the output JSON file
-        """
+        """Export the data lineage graph to JSON format."""
         try:
             lineage_data = {
                 "nodes": [],
                 "edges": []
             }
             
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                
-                # Export nodes
-                cursor.execute("SELECT * FROM nodes")
-                for row in cursor.fetchall():
-                    try:
-                        metadata = json.loads(row['metadata'])
-                    except json.JSONDecodeError:
-                        metadata = {}
-                        
-                    node = {
-                        "node_id": row['id'],
-                        "node_type": row['node_type'],
-                        "name": row['name'],
-                        "description": row['description'],
-                        "created_at": row['metadata'],
-                        "metadata": metadata
-                    }
-                    lineage_data["nodes"].append(node)
-                
-                # Export edges
-                cursor.execute("SELECT * FROM edges")
-                for row in cursor.fetchall():
-                    try:
-                        metadata = json.loads(row['metadata'])
-                    except json.JSONDecodeError:
-                        metadata = {}
-                        
-                    edge = {
-                        "edge_id": row['id'],
-                        "source_id": row['source_id'],
-                        "target_id": row['target_id'],
-                        "operation": row['operation'],
-                        "timestamp": row['metadata'],
-                        "metadata": metadata
-                    }
-                    lineage_data["edges"].append(edge)
+            # Get all nodes
+            self.cursor.execute("SELECT * FROM nodes")
+            for row in self.cursor.fetchall():
+                metadata = json.loads(row[4]) if row[4] else {}
+                node = {
+                    "id": row[0],
+                    "node_type": row[1],
+                    "name": row[2],
+                    "description": row[3],
+                    "metadata": metadata
+                }
+                lineage_data["nodes"].append(node)
             
+            # Get all edges
+            self.cursor.execute("SELECT * FROM edges")
+            for row in self.cursor.fetchall():
+                metadata = json.loads(row[4]) if row[4] else {}
+                edge = {
+                    "id": row[0],
+                    "source_id": row[1],
+                    "target_id": row[2],
+                    "operation": row[3],
+                    "metadata": metadata
+                }
+                lineage_data["edges"].append(edge)
+            
+            # Write to file
             with open(output_file, 'w') as f:
                 json.dump(lineage_data, f, indent=2)
             
-            logger.info(f"Lineage data exported to {output_file}")
+            logger.info(f"Data lineage exported to {output_file}")
+            
         except Exception as e:
-            logger.error(f"Error exporting lineage data: {e}")
+            logger.error(f"Error exporting lineage: {e}")
+            raise
 
 # Singleton pattern for lineage tracker
 _lineage_tracker = None
