@@ -188,39 +188,28 @@ class DataLineage:
             DataNode or None if not found
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM nodes WHERE node_id = ?", (node_id,))
-                row = cursor.fetchone()
-                
-                if row:
-                    try:
-                        metadata = json.loads(row['metadata'])
-                    except json.JSONDecodeError:
-                        logger.warning(f"Invalid JSON metadata for node {node_id}, using empty dict")
-                        metadata = {}
-                        
-                    return DataNode(
-                        node_id=row['node_id'],
-                        node_type=row['node_type'],
-                        name=row['name'],
-                        description=row['description'],
-                        created_at=row['created_at'],
-                        metadata=metadata
-                    )
-                return None
-        except Exception as e:
-            logger.error(f"Error getting node {node_id}: {e}")
-            # Return a dummy node to prevent crashes
-            return DataNode(
-                node_id=node_id,
-                node_type="unknown",
-                name="Error retrieving node",
-                description="An error occurred while retrieving this node",
-                created_at=datetime.datetime.now().isoformat(),
-                metadata={"error": str(e)}
-            )
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT node_id, node_type, name, description, created_at, metadata
+                FROM nodes
+                WHERE node_id = ?
+            """, (node_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                metadata = json.loads(row[5]) if row[5] else {}
+                return DataNode(
+                    node_id=row[0],
+                    node_type=row[1],
+                    name=row[2],
+                    description=row[3],
+                    created_at=row[4],
+                    metadata=metadata
+                )
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"Error getting node: {e}")
+            return None
     
     def get_edge(self, edge_id: str) -> Optional[DataEdge]:
         """Get an edge by its ID.
@@ -268,29 +257,25 @@ class DataLineage:
             List of DataEdge objects representing outgoing edges
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM edges WHERE source_id = ?", (node_id,))
-                
-                edges = []
-                for row in cursor.fetchall():
-                    try:
-                        metadata = json.loads(row['metadata'])
-                    except json.JSONDecodeError:
-                        metadata = {}
-                        
-                    edge = DataEdge(
-                        edge_id=row['edge_id'],
-                        source_id=row['source_id'],
-                        target_id=row['target_id'],
-                        operation=row['operation'],
-                        timestamp=row['created_at'],
-                        metadata=metadata
-                    )
-                    edges.append(edge)
-                
-                return edges
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT edge_id, source_id, target_id, operation, created_at, metadata
+                FROM edges
+                WHERE source_id = ?
+            """, (node_id,))
+            
+            edges = []
+            for row in cursor.fetchall():
+                metadata = json.loads(row[5]) if row[5] else {}
+                edges.append(DataEdge(
+                    edge_id=row[0],
+                    source_id=row[1],
+                    target_id=row[2],
+                    operation=row[3],
+                    timestamp=row[4],
+                    metadata=metadata
+                ))
+            return edges
         except Exception as e:
             logger.error(f"Error getting outgoing edges for node {node_id}: {e}")
             return []
@@ -305,29 +290,25 @@ class DataLineage:
             List of DataEdge objects representing incoming edges
         """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM edges WHERE target_id = ?", (node_id,))
-                
-                edges = []
-                for row in cursor.fetchall():
-                    try:
-                        metadata = json.loads(row['metadata'])
-                    except json.JSONDecodeError:
-                        metadata = {}
-                        
-                    edge = DataEdge(
-                        edge_id=row['edge_id'],
-                        source_id=row['source_id'],
-                        target_id=row['target_id'],
-                        operation=row['operation'],
-                        timestamp=row['created_at'],
-                        metadata=metadata
-                    )
-                    edges.append(edge)
-                
-                return edges
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT edge_id, source_id, target_id, operation, created_at, metadata
+                FROM edges
+                WHERE target_id = ?
+            """, (node_id,))
+            
+            edges = []
+            for row in cursor.fetchall():
+                metadata = json.loads(row[5]) if row[5] else {}
+                edges.append(DataEdge(
+                    edge_id=row[0],
+                    source_id=row[1],
+                    target_id=row[2],
+                    operation=row[3],
+                    timestamp=row[4],
+                    metadata=metadata
+                ))
+            return edges
         except Exception as e:
             logger.error(f"Error getting incoming edges for node {node_id}: {e}")
             return []
@@ -339,59 +320,33 @@ class DataLineage:
             output_file: Path to the output HTML file
         """
         try:
-            try:
-                import networkx as nx
-                from pyvis.network import Network
-            except ImportError:
-                logger.error("Visualization requires networkx and pyvis. Install with: pip install networkx pyvis")
-                return
+            import networkx as nx
+            import matplotlib.pyplot as plt
             
             G = nx.DiGraph()
             
-            # Add nodes to the graph
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                
-                # Add nodes
-                cursor.execute("SELECT * FROM nodes")
-                for row in cursor.fetchall():
-                    node_type = row['node_type']
-                    color_map = {
-                        'source': '#4CAF50',  # Green
-                        'transformation': '#2196F3',  # Blue
-                        'destination': '#F44336',  # Red
-                        'dataset': '#FFC107'  # Yellow
-                    }
-                    color = color_map.get(node_type, '#9C27B0')  # Default purple
-                    
-                    G.add_node(
-                        row['node_id'],
-                        title=f"{row['name']}: {row['description']}",
-                        label=row['name'],
-                        color=color,
-                        shape='dot',
-                        size=25
-                    )
-                
-                # Add edges
-                cursor.execute("SELECT * FROM edges")
-                for row in cursor.fetchall():
-                    G.add_edge(
-                        row['source_id'],
-                        row['target_id'],
-                        title=row['operation'],
-                        label=row['operation']
-                    )
+            # Add nodes
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT node_id, name, node_type FROM nodes")
+            for row in cursor.fetchall():
+                G.add_node(row[0], label=row[1], type=row[2])
             
-            # Generate the visualization
-            net = Network(height="750px", width="100%", directed=True, notebook=False)
-            net.from_nx(G)
-            net.save_graph(output_file)
+            # Add edges
+            cursor.execute("SELECT source_id, target_id, operation FROM edges")
+            for row in cursor.fetchall():
+                G.add_edge(row[0], row[1], label=row[2])
             
+            # Generate visualization
+            plt.figure(figsize=(12, 8))
+            pos = nx.spring_layout(G)
+            nx.draw(G, pos, with_labels=True, node_color='lightblue', 
+                   node_size=2000, font_size=8, font_weight='bold')
+            plt.savefig(output_file)
             logger.info(f"Lineage visualization saved to {output_file}")
+            
         except Exception as e:
             logger.error(f"Error generating visualization: {e}")
+            raise
     
     def export_json(self, output_file: str = "data_lineage.json"):
         """Export the lineage graph to a JSON file.
