@@ -360,18 +360,33 @@ class LineageContext:
                 
                 # Update the target node with error information if we have a valid target_id
                 if self.target_id:
-                    node = self.lineage.get_node(self.target_id)
-                    if node:
-                        # Since we're using DataNode class now, we can directly access metadata
-                        node.metadata["error"] = error_metadata
-                        
-                        # Update the node in the database
+                    try:
+                        # Get current metadata from database
                         self.lineage.cursor.execute("""
-                            UPDATE nodes 
-                            SET metadata = ? 
-                            WHERE id = ?
-                        """, (json.dumps(node.metadata), self.target_id))
-                        self.lineage.conn.commit()
+                            SELECT metadata FROM nodes WHERE id = ?
+                        """, (self.target_id,))
+                        row = self.lineage.cursor.fetchone()
+                        if row:
+                            try:
+                                current_metadata = json.loads(row[0]) if row[0] else {}
+                            except (json.JSONDecodeError, TypeError):
+                                current_metadata = {}
+                            
+                            if not isinstance(current_metadata, dict):
+                                current_metadata = {}
+                            
+                            # Update metadata with error information
+                            current_metadata["error"] = error_metadata
+                            
+                            # Update the node in the database
+                            self.lineage.cursor.execute("""
+                                UPDATE nodes 
+                                SET metadata = ? 
+                                WHERE id = ?
+                            """, (json.dumps(current_metadata), self.target_id))
+                            self.lineage.conn.commit()
+                    except Exception as e:
+                        logger.error(f"Error updating node metadata: {e}")
                 
                 logger.error(f"Error in lineage context: {exc_val}")
             except Exception as e:
