@@ -247,11 +247,18 @@ def fetch_recent_posts(subreddit, hours=24):
             # Update metadata with post count
             node = lineage.get_node(posts_id)
             if node and isinstance(node, dict):
-                node["metadata"] = node.get("metadata", {})
+                # Ensure metadata exists and is a dictionary
+                if "metadata" not in node:
+                    node["metadata"] = {}
+                elif not isinstance(node["metadata"], dict):
+                    node["metadata"] = {}
+                
+                # Update metadata
                 node["metadata"].update({
                     "post_count": post_count,
                     "oldest_post": cutoff_time.isoformat()
                 })
+                
                 # Update the node in the database
                 lineage.cursor.execute("""
                     UPDATE nodes 

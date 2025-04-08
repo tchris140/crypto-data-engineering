@@ -347,8 +347,15 @@ class LineageContext:
                 if self.target_id:
                     node = self.lineage.get_node(self.target_id)
                     if node and isinstance(node, dict):
-                        node["metadata"] = node.get("metadata", {})
+                        # Ensure metadata exists and is a dictionary
+                        if "metadata" not in node:
+                            node["metadata"] = {}
+                        elif not isinstance(node["metadata"], dict):
+                            node["metadata"] = {}
+                        
+                        # Update metadata with error information
                         node["metadata"].update({"error": error_metadata})
+                        
                         # Update the node in the database
                         self.lineage.cursor.execute("""
                             UPDATE nodes 
