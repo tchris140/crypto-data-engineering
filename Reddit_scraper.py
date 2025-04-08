@@ -229,7 +229,7 @@ def fetch_recent_posts(subreddit, hours=24):
         ) as posts_id:
             post_count = 0
             
-            for post in subreddit.new(limit=100):  # Increased limit to ensure we get enough recent posts
+            for post in subreddit.new(limit=100):
                 created_at = datetime.fromtimestamp(float(post.created_utc), tz=timezone.utc)
                 
                 if created_at < cutoff_time:
@@ -244,14 +244,30 @@ def fetch_recent_posts(subreddit, hours=24):
                     ])
                     post_count += 1
             
-            # Add metadata to the lineage
-            lineage.get_node(posts_id).metadata.update({
-                "post_count": post_count,
-                "oldest_post": cutoff_time.isoformat()
-            })
+            # Update metadata with post count
+            node = lineage.get_node(posts_id)
+            if node and isinstance(node, dict):
+                node["metadata"] = node.get("metadata", {})
+                node["metadata"].update({
+                    "post_count": post_count,
+                    "oldest_post": cutoff_time.isoformat()
+                })
+                # Update the node in the database
+                lineage.cursor.execute("""
+                    UPDATE nodes 
+                    SET metadata = ? 
+                    WHERE id = ?
+                """, (json.dumps(node["metadata"]), posts_id))
+                lineage.conn.commit()
             
             return posts
-    except Exception as e:
+    except prawcore.exceptions.NotFound:
+        logger.error("Subreddit not found. Please check the subreddit name.")
+        raise
+    except prawcore.exceptions.Forbidden:
+        logger.error("Access to the subreddit is forbidden. Please check permissions.")
+        raise
+    except prawcore.exceptions.RequestException as e:
         logger.error(f"Failed to fetch posts: {e}")
         raise
 

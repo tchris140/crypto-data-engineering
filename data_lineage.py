@@ -346,8 +346,16 @@ class LineageContext:
                 # Update the target node with error information if we have a valid target_id
                 if self.target_id:
                     node = self.lineage.get_node(self.target_id)
-                    if node:
-                        node.metadata.update({"error": error_metadata})
+                    if node and isinstance(node, dict):
+                        node["metadata"] = node.get("metadata", {})
+                        node["metadata"].update({"error": error_metadata})
+                        # Update the node in the database
+                        self.lineage.cursor.execute("""
+                            UPDATE nodes 
+                            SET metadata = ? 
+                            WHERE id = ?
+                        """, (json.dumps(node["metadata"]), self.target_id))
+                        self.lineage.conn.commit()
                 
                 logger.error(f"Error in lineage context: {exc_val}")
             except Exception as e:
