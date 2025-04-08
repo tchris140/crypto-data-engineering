@@ -81,7 +81,7 @@ class DataLineage:
                     source_id TEXT NOT NULL,
                     target_id TEXT NOT NULL,
                     operation TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
                     metadata TEXT,
                     FOREIGN KEY (source_id) REFERENCES nodes (node_id),
                     FOREIGN KEY (target_id) REFERENCES nodes (node_id)
@@ -167,9 +167,9 @@ class DataLineage:
             
             # Add edge with proper SQLite syntax
             cursor.execute("""
-                INSERT INTO edges (source_id, target_id, operation, created_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            """, (source_id, target_id, operation))
+                INSERT INTO edges (edge_id, source_id, target_id, operation, created_at, metadata)
+                VALUES (?, ?, ?, ?, datetime('now'), ?)
+            """, (str(uuid.uuid4()), source_id, target_id, operation, json.dumps(metadata)))
             
             self.conn.commit()
             logger.info(f"Added edge: {operation} from {source_id} to {target_id}")
@@ -250,7 +250,7 @@ class DataLineage:
                         source_id=row['source_id'],
                         target_id=row['target_id'],
                         operation=row['operation'],
-                        timestamp=row['timestamp'],
+                        timestamp=row['created_at'],
                         metadata=metadata
                     )
                 return None
@@ -285,7 +285,7 @@ class DataLineage:
                         source_id=row['source_id'],
                         target_id=row['target_id'],
                         operation=row['operation'],
-                        timestamp=row['timestamp'],
+                        timestamp=row['created_at'],
                         metadata=metadata
                     )
                     edges.append(edge)
@@ -322,7 +322,7 @@ class DataLineage:
                         source_id=row['source_id'],
                         target_id=row['target_id'],
                         operation=row['operation'],
-                        timestamp=row['timestamp'],
+                        timestamp=row['created_at'],
                         metadata=metadata
                     )
                     edges.append(edge)
@@ -440,7 +440,7 @@ class DataLineage:
                         "source_id": row['source_id'],
                         "target_id": row['target_id'],
                         "operation": row['operation'],
-                        "timestamp": row['timestamp'],
+                        "timestamp": row['created_at'],
                         "metadata": metadata
                     }
                     lineage_data["edges"].append(edge)
