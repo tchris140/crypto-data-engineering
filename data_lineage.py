@@ -168,7 +168,7 @@ class DataLineage:
             # Add edge with proper SQLite syntax
             cursor.execute("""
                 INSERT INTO edges (source_id, target_id, operation, created_at)
-                VALUES (?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
             """, (source_id, target_id, operation))
             
             self.conn.commit()

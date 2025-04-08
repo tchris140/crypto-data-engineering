@@ -297,11 +297,12 @@ def insert_posts_to_db(posts, engine):
             "num_comments", "created_utc", "embedding"
         ])
         
+        # Convert embeddings to string format for PostgreSQL
         records = [
             (row.post_id, row.title, row.text, row.score, 
              row.num_comments, row.created_utc, 
              f"[{','.join(map(str, row.embedding))}]",
-             np.array(row.embedding).tolist())
+             f"[{','.join(map(str, row.embedding))}]")
             for row in df.itertuples(index=False)
         ]
         
