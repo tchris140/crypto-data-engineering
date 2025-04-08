@@ -153,34 +153,30 @@ class DataLineage:
             edge_id: ID of the created edge
         """
         try:
-            edge_id = str(uuid.uuid4())
-            timestamp = datetime.datetime.now().isoformat()
-            metadata = metadata or {}
+            cursor = self.conn.cursor()
             
-            edge = DataEdge(
-                edge_id=edge_id,
-                source_id=source_id,
-                target_id=target_id,
-                operation=operation,
-                timestamp=timestamp,
-                metadata=metadata
-            )
+            # Check if edge already exists
+            cursor.execute("""
+                SELECT 1 FROM edges 
+                WHERE source_id = ? AND target_id = ? AND operation = ?
+            """, (source_id, target_id, operation))
             
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO edges VALUES (?, ?, ?, ?, ?, ?)",
-                    (edge.edge_id, edge.source_id, edge.target_id, edge.operation,
-                     edge.timestamp, json.dumps(edge.metadata))
-                )
-                conn.commit()
-                
+            if cursor.fetchone():
+                logger.info(f"Edge already exists: {operation} from {source_id} to {target_id}")
+                return
+            
+            # Add edge with proper SQLite syntax
+            cursor.execute("""
+                INSERT INTO edges (source_id, target_id, operation, created_at)
+                VALUES (?, ?, ?, datetime('now'))
+            """, (source_id, target_id, operation))
+            
+            self.conn.commit()
             logger.info(f"Added edge: {operation} from {source_id} to {target_id}")
-            return edge_id
-        except Exception as e:
+            
+        except sqlite3.Error as e:
             logger.error(f"Error adding edge: {e}")
-            # Return a dummy edge ID to prevent crashes
-            return f"dummy_edge_{str(uuid.uuid4())}"
+            raise
     
     def get_node(self, node_id: str) -> Optional[DataNode]:
         """Get a node by its ID.

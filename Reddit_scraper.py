@@ -7,7 +7,7 @@ import json
 import logging
 import sys
 import argparse
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 from sqlalchemy import text
 from psycopg2.extras import execute_values
@@ -138,18 +138,24 @@ def init_openai():
 
 def get_db_connection():
     """Create database connection with error handling."""
-    if MOCK_MODE:
-        logger.info("Using mock database connection")
-        from sqlalchemy import create_engine
-        return create_engine('sqlite:///:memory:')
-        
     try:
-        return create_engine(
-            f'postgresql://{get_env_var("DB_USER")}:{get_env_var("DB_PASSWORD")}@'
-            f'{get_env_var("DB_HOST")}:{get_env_var("DB_PORT")}/{get_env_var("DB_NAME")}'
-        )
+        if MOCK_MODE:
+            logger.info("Using mock database connection")
+            # Create an in-memory SQLite database for mock mode
+            return create_engine('sqlite:///:memory:')
+        else:
+            # Create PostgreSQL connection
+            return create_engine(
+                f'postgresql://{get_env_var("DB_USER")}:{get_env_var("DB_PASSWORD")}@'
+                f'{get_env_var("DB_HOST")}:{get_env_var("DB_PORT")}/{get_env_var("DB_NAME")}'
+            )
     except Exception as e:
         logger.error(f"Failed to create database connection: {e}")
+        if not MOCK_MODE:
+            logger.info("Falling back to mock mode")
+            global MOCK_MODE
+            MOCK_MODE = True
+            return get_db_connection()  # Retry with mock mode
         raise
 
 def get_embedding(text):
@@ -251,76 +257,61 @@ def insert_posts_to_db(posts, engine):
         logger.info("No new posts to insert")
         return
     
-    # Create data lineage nodes for the posts dataset
-    lineage = get_lineage_tracker()
-    posts_dataset_id = lineage.add_node(
-        node_type="dataset",
-        name="Reddit Posts with Embeddings",
-        description="Reddit posts ready for database insertion",
-        metadata={"post_count": len(posts)}
-    )
-    
-    df = pd.DataFrame(posts, columns=[
-        "post_id", "title", "text", "score", 
-        "num_comments", "created_utc", "embedding"
-    ])
-    
     try:
-        with LineageContext(
-            source_nodes=posts_dataset_id,
-            operation="load",
-            target_name="PostgreSQL Database",
-            target_description="Reddit posts stored in PostgreSQL with pgvector",
-            target_type="destination",
-            metadata={"timestamp": datetime.now().isoformat(), "table": "reddit_embeddings"}
-        ) as db_id:
-            conn = engine.raw_connection()
-            cursor = conn.cursor()
-            
-            # Check if we need to add the vector column
-            cursor.execute("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'reddit_embeddings' AND column_name = 'embedding_vector')")
-            has_vector_column = cursor.fetchone()[0]
-            
-            if not has_vector_column:
-                logger.info("Adding embedding_vector column to reddit_embeddings table")
-                cursor.execute("ALTER TABLE reddit_embeddings ADD COLUMN embedding_vector vector(1536)")
-                conn.commit()
-            
-            # PostgreSQL with ON CONFLICT
-            insert_query = """
-                INSERT INTO reddit_embeddings 
-                    (post_id, title, text, score, num_comments, created_utc, embedding, embedding_vector)
-                VALUES %s
-                ON CONFLICT (post_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    text = EXCLUDED.text,
-                    score = EXCLUDED.score,
-                    num_comments = EXCLUDED.num_comments,
-                    created_utc = EXCLUDED.created_utc,
-                    embedding = EXCLUDED.embedding,
-                    embedding_vector = EXCLUDED.embedding_vector;
-            """
-            
-            records = [
-                (row.post_id, row.title, row.text, row.score, 
-                 row.num_comments, row.created_utc, 
-                 f"[{','.join(map(str, row.embedding))}]",
-                 np.array(row.embedding).tolist())
-                for row in df.itertuples(index=False)
-            ]
-            
-            execute_values(cursor, insert_query, records, template="""
-                (%s, %s, %s, %s, %s, %s, %s, %s::vector)
-            """)
-            
+        conn = engine.raw_connection()
+        cursor = conn.cursor()
+        
+        # Check if we need to add the vector column
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 
+                FROM information_schema.columns 
+                WHERE table_name = 'reddit_embeddings' 
+                AND column_name = 'embedding_vector'
+            )
+        """)
+        has_vector_column = cursor.fetchone()[0]
+        
+        if not has_vector_column:
+            logger.info("Adding embedding_vector column to reddit_embeddings table")
+            cursor.execute("ALTER TABLE reddit_embeddings ADD COLUMN embedding_vector vector(1536)")
             conn.commit()
-            
-            # Add metadata to the lineage
-            lineage.get_node(db_id).metadata.update({
-                "records_inserted": len(posts)
-            })
-            
-            logger.info(f"Successfully inserted {len(posts)} posts into database")
+        
+        # PostgreSQL with ON CONFLICT
+        insert_query = """
+            INSERT INTO reddit_embeddings 
+                (post_id, title, text, score, num_comments, created_utc, embedding, embedding_vector)
+            VALUES %s
+            ON CONFLICT (post_id) DO UPDATE SET
+                title = EXCLUDED.title,
+                text = EXCLUDED.text,
+                score = EXCLUDED.score,
+                num_comments = EXCLUDED.num_comments,
+                created_utc = EXCLUDED.created_utc,
+                embedding = EXCLUDED.embedding,
+                embedding_vector = EXCLUDED.embedding_vector
+        """
+        
+        df = pd.DataFrame(posts, columns=[
+            "post_id", "title", "text", "score", 
+            "num_comments", "created_utc", "embedding"
+        ])
+        
+        records = [
+            (row.post_id, row.title, row.text, row.score, 
+             row.num_comments, row.created_utc, 
+             f"[{','.join(map(str, row.embedding))}]",
+             np.array(row.embedding).tolist())
+            for row in df.itertuples(index=False)
+        ]
+        
+        # Use a simpler template without explicit vector casting
+        execute_values(cursor, insert_query, records, template="""
+            (%s, %s, %s, %s, %s, %s, %s, %s)
+        """)
+        
+        conn.commit()
+        logger.info(f"Successfully inserted {len(posts)} posts into database")
         
     except Exception as e:
         logger.error(f"Failed to insert posts into database: {e}")

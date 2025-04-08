@@ -4,6 +4,11 @@ This repository contains tools for collecting, processing, and analyzing cryptoc
 
 ## Features
 
+- **Multiple Data Sources**: Integration of DeFi Llama API, CoinMarketCap API, and Reddit data
+- **Advanced RAG Implementation**: Using LangChain for modular and extensible RAG capabilities
+- **Data Lineage Tracking**: Comprehensive tracking of data flow and transformations
+- **Docker Containerization**: Full containerization for easy deployment and testing
+- **CI/CD Pipeline**: Automated testing and deployment using GitHub Actions
 - **DeFi Llama Integration**: Fetches Total Value Locked (TVL) metrics for blockchain networks
 - **CoinMarketCap Integration**: Retrieves market data including prices, volumes, and market caps
 - **Reddit Data Scraping**: Collects posts from cryptocurrency subreddits with OpenAI embeddings
@@ -12,7 +17,28 @@ This repository contains tools for collecting, processing, and analyzing cryptoc
 - **LangChain RAG Implementation**: Leverages LangChain for modular, extensible RAG capabilities
 - **Interactive Example**: User-friendly interface for interacting with the RAG system
 - **Multiple Cryptocurrencies**: Support for Bitcoin, Ethereum, Solana, and cryptocurrency topics like regulations, mining, and NFTs
-- **Docker Support**: Full containerization for easy deployment and testing
+
+## Technologies Used
+
+### Core Technologies
+- **LangChain**: Framework for building applications with LLMs [Documentation](https://python.langchain.com/docs/get_started/introduction)
+- **PostgreSQL with pgvector**: Vector database for efficient similarity search [Documentation](https://github.com/pgvector/pgvector)
+- **Docker**: Containerization platform [Documentation](https://docs.docker.com/)
+- **OpenAI API**: For generating text embeddings [Documentation](https://platform.openai.com/docs/api-reference)
+
+### Data Sources
+- **DeFi Llama API**: For DeFi metrics and TVL data
+- **CoinMarketCap API**: For cryptocurrency market data
+- **Reddit API**: For social sentiment analysis
+
+### Development Tools
+- **GitHub Actions**: For CI/CD pipeline
+- **Python**: Primary development language
+- **SQLAlchemy**: Database ORM
+- **FastAPI**: API framework
+
+### Research Foundation
+- **RAG Implementation**: Based on the work of Lewis et al. (2020) "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
 
 ## Components
 
