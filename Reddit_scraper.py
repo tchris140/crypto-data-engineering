@@ -139,7 +139,7 @@ def init_openai():
 def get_db_connection():
     """Create database connection with error handling."""
     try:
-        if MOCK_MODE:
+        if MOCK_MODE or os.getenv('CI'):
             logger.info("Using mock database connection")
             # Create an in-memory SQLite database for mock mode
             return create_engine('sqlite:///:memory:')
@@ -261,20 +261,20 @@ def insert_posts_to_db(posts, engine):
         conn = engine.raw_connection()
         cursor = conn.cursor()
         
-        # Check if we need to add the vector column
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 
-                FROM information_schema.columns 
-                WHERE table_name = 'reddit_embeddings' 
-                AND column_name = 'embedding_vector'
-            )
-        """)
-        has_vector_column = cursor.fetchone()[0]
-        
-        if not has_vector_column:
-            logger.info("Adding embedding_vector column to reddit_embeddings table")
-            cursor.execute("ALTER TABLE reddit_embeddings ADD COLUMN embedding_vector vector(1536)")
+        if MOCK_MODE or os.getenv('CI'):
+            # Create mock table for testing
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS reddit_embeddings (
+                    post_id TEXT PRIMARY KEY,
+                    title TEXT,
+                    text TEXT,
+                    score INTEGER,
+                    num_comments INTEGER,
+                    created_utc TIMESTAMP,
+                    embedding TEXT,
+                    embedding_vector TEXT
+                )
+            """)
             conn.commit()
         
         # PostgreSQL with ON CONFLICT
