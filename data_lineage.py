@@ -144,23 +144,22 @@ class DataLineage:
             
             row = self.cursor.fetchone()
             if row:
-                # Ensure metadata is properly initialized as a dictionary
-                metadata = {}
-                if row[4]:  # If metadata exists
-                    try:
-                        metadata = json.loads(row[4])
-                        if not isinstance(metadata, dict):
-                            metadata = {}
-                    except json.JSONDecodeError:
-                        metadata = {}
+                try:
+                    metadata = json.loads(row[4]) if row[4] else {}
+                except (json.JSONDecodeError, TypeError):
+                    metadata = {}
                 
-                return {
-                    "id": row[0],
-                    "node_type": row[1],
-                    "name": row[2],
-                    "description": row[3],
-                    "metadata": metadata
-                }
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                
+                return DataNode(
+                    node_id=row[0],
+                    node_type=row[1],
+                    name=row[2],
+                    description=row[3],
+                    created_at=datetime.datetime.now().isoformat(),
+                    metadata=metadata
+                )
             return None
         except sqlite3.Error as e:
             logger.error(f"Error getting node: {e}")
@@ -355,30 +354,23 @@ class LineageContext:
                 # Log the error in metadata
                 error_metadata = {
                     "error_type": str(exc_type.__name__),
-                    "error_message": str(exc_val)
+                    "error_message": str(exc_val),
+                    "timestamp": datetime.datetime.now().isoformat()
                 }
                 
                 # Update the target node with error information if we have a valid target_id
                 if self.target_id:
                     node = self.lineage.get_node(self.target_id)
                     if node:
-                        # Ensure metadata exists and is a dictionary
-                        if not isinstance(node, dict):
-                            node = {"metadata": {}}
-                        if "metadata" not in node:
-                            node["metadata"] = {}
-                        elif not isinstance(node["metadata"], dict):
-                            node["metadata"] = {}
-                        
-                        # Update metadata with error information
-                        node["metadata"].update({"error": error_metadata})
+                        # Since we're using DataNode class now, we can directly access metadata
+                        node.metadata["error"] = error_metadata
                         
                         # Update the node in the database
                         self.lineage.cursor.execute("""
                             UPDATE nodes 
                             SET metadata = ? 
                             WHERE id = ?
-                        """, (json.dumps(node["metadata"]), self.target_id))
+                        """, (json.dumps(node.metadata), self.target_id))
                         self.lineage.conn.commit()
                 
                 logger.error(f"Error in lineage context: {exc_val}")
